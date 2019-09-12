@@ -8,15 +8,15 @@ LDFLAGS = -g   # debugging symbols in build
 LDLIBS = -lz   # link with libz
 
 # For students 
-LIB_UTIL = zutil.o crc.o
-SRCS   = main.c crc.c zutil.c
-OBJS   = main.o $(LIB_UTIL) 
+LIB_UTIL = crc.o
+SRCS   = main2.c crc.c
+OBJS   = main2.o $(LIB_UTIL) 
 
-TARGETS= main.out 
+TARGETS= main2.out 
 
 all: ${TARGETS}
 
-main.out: $(OBJS) 
+main2.out: $(OBJS) 
 	$(LD) -o $@ $^ $(LDLIBS) $(LDFLAGS) 
 
 %.o: %.c 
