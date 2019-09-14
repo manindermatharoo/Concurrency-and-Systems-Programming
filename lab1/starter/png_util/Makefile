@@ -8,8 +8,8 @@ LDFLAGS = -g   # debugging symbols in build
 LDLIBS = -lz   # link with libz
 
 # For students 
-LIB_UTIL = crc.o
-SRCS   = main2.c crc.c
+LIB_UTIL = crc.o zutil.o
+SRCS   = main2.c crc.c zutil.c
 OBJS   = main2.o $(LIB_UTIL) 
 
 TARGETS= main2.out 
