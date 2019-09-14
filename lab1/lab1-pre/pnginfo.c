@@ -117,6 +117,12 @@ int check_crc_value(struct chunk *out)
 
 int main (int argc, char **argv)
 {
+    /* Ensure there is one argument */
+    if (argc == 1 || argc > 2) {
+        fprintf(stderr, "Usage: %s <png file>\n", argv[0]);
+        exit(1);
+    }
+
     /* Create all variables */
     U8 png_file_header[PNG_SIG_SIZE];
 
@@ -130,12 +136,6 @@ int main (int argc, char **argv)
     U8 *p_IEND_data = NULL; /* Stores data from IEND chunk */
 
     data_IHDR_p IHDR_struct_data = (data_IHDR_p)malloc(sizeof(DATA_IHDR_SIZE));
-
-    /* Ensure there is one argument */
-    if (argc == 1 || argc > 2) {
-        fprintf(stderr, "Usage: %s <png file>\n", argv[0]);
-        exit(1);
-    }
 
     /* Open binary png file */
     FILE *png_file = fopen(argv[1], "rb");
