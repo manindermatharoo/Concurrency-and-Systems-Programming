@@ -1,3 +1,8 @@
+# Binary files
+*
+!/**/
+!*.*
+
 #LaTex generated files
 
 **/*.aux
