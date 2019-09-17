@@ -1,31 +1,41 @@
-#include <errno.h>    /* for errno                   */
-#include <stdio.h>    /* for printf(), perror()...   */
-#include <stdlib.h>   /* for malloc()                */
-#include "arpa/inet.h" /* for htonl()                */
-#include "crc.h"      /* for crc()                   */
-#include "lab_png.h"  /* simple PNG data structures  */
+#include <errno.h>     /* for errno                   */
+#include <stdio.h>     /* for printf(), perror()...   */
+#include <stdlib.h>    /* for malloc()                */
+#include <string.h>    /* for strstr()                */
+#include "arpa/inet.h" /* for htonl()                 */
+#include "crc.h"       /* for crc()                   */
+#include "lab_png.h"   /* simple PNG data structures  */
 
 int is_png(U8 *buf, size_t n)
 {
     int file_is_png = 0;
 
-    /* Create array that matches header of a png file */
-    U8 png_byte_header[n];
-    png_byte_header[0] = 137; //89
-    png_byte_header[1] = 80;  //50
-    png_byte_header[2] = 78;  //4E
-    png_byte_header[3] = 71;  //47
-    png_byte_header[4] = 13;  //0D
-    png_byte_header[5] = 10;  //0A
-    png_byte_header[6] = 26;  //1A
-    png_byte_header[7] = 10;  //0A
-
-    /* Make sure the header of the file matches a png header */
-    for(int i = 0; i < n; i++)
+    //make sure that the file header was at least 8 bytes
+    if(n < 8)
     {
-        if(buf[i] != png_byte_header[i])
+        file_is_png = 1;
+    }
+    else
+    {
+        /* Create array that matches header of a png file */
+        U8 png_byte_header[n];
+        png_byte_header[0] = 137; //89
+        png_byte_header[1] = 80;  //50
+        png_byte_header[2] = 78;  //4E
+        png_byte_header[3] = 71;  //47
+        png_byte_header[4] = 13;  //0D
+        png_byte_header[5] = 10;  //0A
+        png_byte_header[6] = 26;  //1A
+        png_byte_header[7] = 10;  //0A
+
+        /* Make sure the header of the file matches a png header */
+        for(int i = 0; i < n; i++)
         {
-            file_is_png = 1;
+            if(buf[i] != png_byte_header[i])
+            {
+                file_is_png = 1;
+                break;
+            }
         }
     }
 
@@ -117,8 +127,11 @@ int check_crc_value(struct chunk *out)
 
 int main (int argc, char **argv)
 {
-    /* Ensure there is one argument */
-    if (argc == 1 || argc > 2) {
+    /* file extension accepted */
+    char *file_extension = ".png";
+
+    /* Ensure there is one argument or that the argument is a .png file*/
+    if (argc == 1 || argc > 2 || (strstr(argv[1], file_extension) == NULL)) {
         fprintf(stderr, "Usage: %s <png file>\n", argv[0]);
         exit(1);
     }
@@ -144,7 +157,7 @@ int main (int argc, char **argv)
     int header_bytes = fread(png_file_header, 1, PNG_SIG_SIZE, png_file);
 
     /* Make sure the file is a png before preceeding */
-    if(is_png(png_file_header, header_bytes) != 0 || header_bytes < 8)
+    if(is_png(png_file_header, header_bytes) != 0)
     {
         printf("%s: Not a PNG file\n", argv[1]);
     }
