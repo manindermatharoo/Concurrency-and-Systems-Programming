@@ -127,12 +127,20 @@ int check_crc_value(struct chunk *out)
 
 int main (int argc, char **argv)
 {
-    /* file extension accepted */
-    char *file_extension = ".png";
-
     /* Ensure there is one argument or that the argument is a .png file*/
-    if (argc == 1 || argc > 2 || (strstr(argv[1], file_extension) == NULL)) {
+    if (argc == 1 || argc > 2)
+    {
         fprintf(stderr, "Usage: %s <png file>\n", argv[0]);
+        exit(1);
+    }
+
+    /* Open binary png file */
+    FILE *png_file = fopen(argv[1], "rb");
+
+    /* make sure the file is a valid file to open (exists) */
+    if(png_file == NULL)
+    {
+        fprintf(stderr, "Couldn't open %s: %s\n", argv[1], strerror(errno));
         exit(1);
     }
 
@@ -149,9 +157,6 @@ int main (int argc, char **argv)
     U8 *p_IEND_data = NULL; /* Stores data from IEND chunk */
 
     data_IHDR_p IHDR_struct_data = (data_IHDR_p)malloc(sizeof(DATA_IHDR_SIZE));
-
-    /* Open binary png file */
-    FILE *png_file = fopen(argv[1], "rb");
 
     /* Read the first 8 bytes of png file which should be the header */
     int header_bytes = fread(png_file_header, 1, PNG_SIG_SIZE, png_file);
