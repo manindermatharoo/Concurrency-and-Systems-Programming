@@ -10,7 +10,7 @@ int is_png(U8 *buf, size_t n)
 {
     int file_is_png = 0;
 
-    /* make sure that the file header was at least 8 bytes */
+    //make sure that the file header was at least 8 bytes
     if(n < 8)
     {
         file_is_png = 1;
@@ -125,7 +125,7 @@ int check_crc_value(struct chunk *out)
     return 0;
 }
 
-int main (int argc, char **argv)
+int main3 (int argc, char **argv)
 {
     /* file extension accepted */
     char *file_extension = ".png";
