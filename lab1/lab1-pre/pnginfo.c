@@ -125,9 +125,9 @@ int check_crc_value(struct chunk *out)
     return 0;
 }
 
-int main (int argc, char **argv)
+int main(int argc, char **argv)
 {
-    /* Ensure there is one argument or that the argument is a .png file*/
+    /* Ensure there is one argument*/
     if (argc == 1 || argc > 2)
     {
         fprintf(stderr, "Usage: %s <png file>\n", argv[0]);
