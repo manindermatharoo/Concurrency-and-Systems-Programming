@@ -93,24 +93,12 @@ U32 get_png_width(struct data_IHDR *buf)
     return buf->width;
 }
 
-U32 check_crc_value(struct chunk *out)
+int check_crc_value(struct chunk *out)
 {
-    /* Concatenate the type and data fields together */
-    int buf_size = out->length + CHUNK_TYPE_SIZE;
-    U8 buf[buf_size];
-
-    for(int i = 0; i < CHUNK_TYPE_SIZE; i++)
-    {
-        buf[i] = out->type[i];
-    }
-
-    for(int i = 0; i < out->length; i++)
-    {
-        buf[CHUNK_TYPE_SIZE+i] = out->p_data[i];
-    }
+    int ret = 0;
 
     /* Calculate CRC */
-    U32 calculated_CRC = crc(buf, buf_size);
+    U32 calculated_CRC = calculate_crc_value(out);
 
     /* Compare the calculated and expected CRC values */
     if(out->crc != calculated_CRC)
@@ -120,9 +108,10 @@ U32 check_crc_value(struct chunk *out)
             printf("%c", out->type[i]);
         }
         printf(" chunk CRC error: computed %x, expected %x \n", calculated_CRC, out->crc);
+        ret = 1;
     }
 
-    return calculated_CRC;
+    return ret;
 }
 
 U32 calculate_crc_value(struct chunk *out)
@@ -145,4 +134,77 @@ U32 calculate_crc_value(struct chunk *out)
     U32 calculated_CRC = crc(buf, buf_size);
 
     return calculated_CRC;
+}
+
+void initialize_PNG_file_struct(struct PNG_file_data *png_image)
+{
+    png_image->png_file_header = (U8 *)malloc(PNG_SIG_SIZE * sizeof(U8));
+
+    png_image->png_format = (simple_PNG_p)malloc(sizeof(struct simple_PNG));
+    png_image->png_format->p_IHDR = (chunk_p)malloc(sizeof(struct chunk));
+    png_image->png_format->p_IDAT = (chunk_p)malloc(sizeof(struct chunk));
+    png_image->png_format->p_IEND = (chunk_p)malloc(sizeof(struct chunk));
+
+    png_image->p_IHDR_data = NULL;
+    png_image->p_IDAT_data = NULL;
+    png_image->p_IEND_data = NULL;
+
+    png_image->IHDR_struct_data = (data_IHDR_p)malloc(sizeof(DATA_IHDR_SIZE));
+}
+
+int process_png_file(struct PNG_file_data *png_image, char *file_name)
+{
+    int ret = 0;
+
+    /* Open binary png file */
+    FILE *png_file = fopen(file_name, "rb");
+
+    /* make sure the file is a valid file to open (exists) */
+    if(png_file == NULL)
+    {
+        fprintf(stderr, "Couldn't open %s: %s\n", file_name, strerror(errno));
+        exit(1);
+    }
+
+    /* Create all variables */
+    initialize_PNG_file_struct(png_image);
+
+    int ret_IHDR_CRC_check;
+    int ret_IDAT_CRC_check;
+    int ret_IEND_CRC_check;
+
+    /* Read the first 8 bytes of png file which should be the header */
+    int header_bytes = fread(png_image->png_file_header, 1, PNG_SIG_SIZE, png_file);
+
+    /* Make sure the file is a png before preceeding */
+    if(is_png(png_image->png_file_header, header_bytes) != 0)
+    {
+        printf("%s: Not a PNG file\n", file_name);
+        ret = 1;
+    }
+    else
+    {
+        /* Collect all the information from each chunk */
+        process_png_chunk(png_image->png_format->p_IHDR, png_image->p_IHDR_data, png_file);
+        process_png_chunk(png_image->png_format->p_IDAT, png_image->p_IDAT_data, png_file);
+        process_png_chunk(png_image->png_format->p_IEND, png_image->p_IEND_data, png_file);
+
+        /* Fill out the IHDR data structure */
+        get_png_data_IHDR(png_image->png_format->p_IHDR, png_image->IHDR_struct_data);
+
+        /* Compute CRC checks */
+        ret_IHDR_CRC_check = check_crc_value(png_image->png_format->p_IHDR);
+        ret_IDAT_CRC_check = check_crc_value(png_image->png_format->p_IDAT);
+        ret_IEND_CRC_check = check_crc_value(png_image->png_format->p_IEND);
+    }
+
+    if((ret_IHDR_CRC_check != 0) || (ret_IDAT_CRC_check != 0) || (ret_IEND_CRC_check != 0))
+    {
+        ret = 1;
+    }
+
+    /* Close the png file that was opened */
+    fclose(png_file);
+
+    return ret;
 }

@@ -1,128 +1,208 @@
-#include <sys/types.h>
-#include <dirent.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <stdio.h>   /* for printf().  man 3 printf */
-#include <stdlib.h>  /* for exit().    man 3 exit   */
-#include <string.h>  /* for strcat().  man strcat   */
-#include <sys/types.h>
-#include "lab_png.h"   /* simple PNG data structures  */
-#include <errno.h>
-#include "crc.h"      /* for crc()                   */
-#include "zutil.h"    /* for mem_def() and mem_inf() */
-#include "arpa/inet.h" /* for htonl()                 */
+#include "catpng.h"
 
-int main(int argc, char **argv)
+int uncompress_IDAT_image_data(struct PNG_file_data *compressed_png_file,
+                               struct IDAT_uncompressed_data *compressed_png_info)
 {
-    /* Ensure there is one argument*/
-    if (argc == 1)
+    int ret = 0;
+
+    /* Calculate the length of the IDAT data after uncompression given by (1+4W)H */
+    compressed_png_info->IDAT_uncompressed_length = (1 + (4*get_png_width(compressed_png_file->IHDR_struct_data)))*(get_png_height(compressed_png_file->IHDR_struct_data));
+
+    /* Allocate enough space in the buffer that will contain uncompressed data */
+    compressed_png_info->IDAT_uncompressed_data = (U8 *)malloc(sizeof(U8) * (compressed_png_info->IDAT_uncompressed_length));
+
+    /* Uncompress IDAT data */
+    ret = mem_inf(compressed_png_info->IDAT_uncompressed_data, &compressed_png_info->IDAT_uncompressed_length, \
+                  compressed_png_file->png_format->p_IDAT->p_data, compressed_png_file->png_format->p_IDAT->length);
+
+    return ret;
+}
+
+int png_files_same_width(struct PNG_file_data *png_file,
+                         int total_number_of_images)
+{
+    int ret = 0;
+
+    for(int i = 1; i < total_number_of_images; i++)
     {
-        fprintf(stderr, "Usage: %s <png file>\n", argv[0]);
+        if((get_png_width(png_file[i].IHDR_struct_data)) != (get_png_width(png_file[0].IHDR_struct_data)))
+        {
+            ret = 1;
+        }
+    }
+
+    return ret;
+}
+
+void calculate_concatenated_length_and_height(U64 *concatenated_png_length,
+                                              U32 *total_concatenated_height,
+                                              int total_number_of_images,
+                                              struct PNG_file_data *png_file,
+                                              struct IDAT_uncompressed_data *uncompressed_png_info)
+{
+    for(int i = 0; i < total_number_of_images; i++)
+    {
+        *concatenated_png_length += uncompressed_png_info[i].IDAT_uncompressed_length;
+        *total_concatenated_height += png_file[i].IHDR_struct_data->height;
+    }
+}
+
+U8 * concatenate_uncompressed_png_images(struct IDAT_uncompressed_data *uncompressed_png_info,
+                                         U64 concatenate_length,
+                                         int total_number_of_images)
+{
+    U8 *buf = (U8 *)malloc(concatenate_length * sizeof(U8));
+    U64 bytes_offset = 0;
+    for(int i = 0; i < total_number_of_images; i++)
+    {
+        memcpy(buf + bytes_offset, uncompressed_png_info[i].IDAT_uncompressed_data, uncompressed_png_info[i].IDAT_uncompressed_length);
+        bytes_offset += uncompressed_png_info[i].IDAT_uncompressed_length;
+    }
+    return buf;
+}
+
+U8 * concatenate_compressed_IDAT(U64 *compressed_data_length,
+                                U8 *uncompressed_data,
+                                U64 uncompressed_data_length)
+{
+    U8 *buf = (U8 *)malloc(2 * uncompressed_data_length * sizeof(U8));
+    int ret = 0;
+    ret = mem_def(buf, compressed_data_length, uncompressed_data, uncompressed_data_length, Z_DEFAULT_COMPRESSION);
+    if (ret != 0)
+    {
+        fprintf(stderr,"mem_def failed. ret = %d.\n", ret);
+        free(buf);
+        buf = NULL;
+    }
+
+    return buf;
+
+}
+
+int populate_IHDR_png_chunk(struct PNG_file_data *png_file,
+                            struct PNG_file_data *original_png_file,
+                            U8 *IHDR_buf,
+                            U32 image_height)
+{
+    /* Populate the IHDR length */
+    png_file->png_format->p_IHDR->length = DATA_IHDR_SIZE;
+
+    /* Populate the IHDR type */
+    png_file->png_format->p_IHDR->type[0] = 'I';
+    png_file->png_format->p_IHDR->type[1] = 'H';
+    png_file->png_format->p_IHDR->type[2] = 'D';
+    png_file->png_format->p_IHDR->type[3] = 'R';
+
+    /* Populate the IHDR p_data, only change height keep all the original the same */
+    IHDR_buf[0] = (original_png_file[0].IHDR_struct_data->width >> 24) & 0xFF;
+    IHDR_buf[1] = (original_png_file[0].IHDR_struct_data->width >> 16) & 0xFF;
+    IHDR_buf[2] = (original_png_file[0].IHDR_struct_data->width >> 8) & 0xFF;
+    IHDR_buf[3] = original_png_file[0].IHDR_struct_data->width & 0xFF;
+
+    IHDR_buf[4] = (image_height >> 24) & 0xFF;
+    IHDR_buf[5] = (image_height >> 16) & 0xFF;
+    IHDR_buf[6] = (image_height >> 8) & 0xFF;
+    IHDR_buf[7] = image_height & 0xFF;
+
+    IHDR_buf[8] = original_png_file[0].IHDR_struct_data->bit_depth;
+    IHDR_buf[9] = original_png_file[0].IHDR_struct_data->color_type;
+    IHDR_buf[10] = original_png_file[0].IHDR_struct_data->compression;
+    IHDR_buf[11] = original_png_file[0].IHDR_struct_data->filter;
+    IHDR_buf[12] = original_png_file[0].IHDR_struct_data->interlace;
+
+    png_file->png_format->p_IHDR->p_data = IHDR_buf;
+
+    /* Populate the IHDR crc */
+    png_file->png_format->p_IHDR->crc = calculate_crc_value(png_file->png_format->p_IHDR);
+
+    return 0;
+}
+
+int populate_IDAT_png_chunk(struct chunk *out,
+                            U8 *IDAT_compressed_data,
+                            U64 IDAT_length)
+{
+    /* Populate the IDAT length */
+    out->length = IDAT_length;
+
+    /* Populate the IDAT type */
+    out->type[0] = 'I';
+    out->type[1] = 'D';
+    out->type[2] = 'A';
+    out->type[3] = 'T';
+
+    /* Populate the IDAT p_data */
+    out->p_data = IDAT_compressed_data;
+
+    /* Populate the IDAT crc */
+    out->crc = calculate_crc_value(out);
+
+    return 0;
+}
+
+int populate_IEND_png_chunk(struct chunk *out)
+{
+    /* Populate the IDAT length */
+    out->length = DATA_IEND_SIZE;
+
+    /* Populate the IDAT type */
+    out->type[0] = 'I';
+    out->type[1] = 'E';
+    out->type[2] = 'N';
+    out->type[3] = 'D';
+
+    /* Populate the IDAT crc */
+    out->crc = calculate_crc_value(out);
+
+    return 0;
+}
+
+int write_png_chunk(struct chunk *out,
+                    FILE *fs)
+{
+     /* Write the chunk data length */
+    U32 length = htonl(out->length);
+    fwrite(&length, 1, CHUNK_LEN_SIZE, fs);
+
+    /* Write the chunk type */
+    fwrite(out->type, 1, CHUNK_TYPE_SIZE, fs);
+
+    /* Write the chunk data */
+    if(out->length != 0)
+    {
+        fwrite(out->p_data, 1, out->length, fs);
+    }
+
+    /* Write the chunk CRC */
+    U32 calculated_crc = htonl(out->crc);
+    fwrite(&calculated_crc, 1, CHUNK_CRC_SIZE, fs);
+
+    return 0;
+}
+
+int create_new_png(struct PNG_file_data *new_png_file,
+                   struct PNG_file_data *old_png_file,
+                   U8 *concated_IDAT_data,
+                   U64 new_png_file_length,
+                   U32 new_png_height,
+                   char *file_name)
+{
+    /* Open binary png file */
+    FILE *save_png_file = fopen(file_name, "w");
+
+    /* make sure the file is a valid file to open (exists) */
+    if(save_png_file == NULL)
+    {
+        fprintf(stderr, "Couldn't create %s: %s\n", file_name, strerror(errno));
         exit(1);
     }
 
-    png_image_data_p concatenated_png_images = (png_image_data_p)malloc((argc-1) * sizeof(struct png_image_data));
+    /* Create all variables */
+    initialize_PNG_file_struct(new_png_file);
 
-    for(int i = 1; i < argc; i++)
-    {
-        /* Open binary png file */
-        FILE *png_file = fopen(argv[i], "rb");
+    U8 IHDR_data[DATA_IHDR_SIZE];
 
-        /* make sure the file is a valid file to open (exists) */
-        if(png_file == NULL)
-        {
-            fprintf(stderr, "Couldn't open %s: %s\n", argv[i], strerror(errno));
-            exit(1);
-        }
-
-        /* Create all variables */
-        U8 *png_file_header = (U8 *)malloc(PNG_SIG_SIZE * sizeof(U8));
-
-        simple_PNG_p png_format = (simple_PNG_p)malloc(sizeof(struct simple_PNG));
-        png_format->p_IHDR = (chunk_p)malloc(sizeof(struct chunk));
-        png_format->p_IDAT = (chunk_p)malloc(sizeof(struct chunk));
-        png_format->p_IEND = (chunk_p)malloc(sizeof(struct chunk));
-
-        U8 *p_IHDR_data = NULL; /* Stores data from IHDR chunk */
-        U8 *p_IDAT_data = NULL; /* Stores data from IDAT chunk */
-        U8 *p_IEND_data = NULL; /* Stores data from IEND chunk */
-
-        data_IHDR_p IHDR_struct_data = (data_IHDR_p)malloc(sizeof(DATA_IHDR_SIZE));
-
-        /* Read the first 8 bytes of png file which should be the header */
-        int header_bytes = fread(png_file_header, 1, PNG_SIG_SIZE, png_file);
-
-        /* Make sure the file is a png before preceeding */
-        if(is_png(png_file_header, header_bytes) != 0)
-        {
-            printf("%s: Not a PNG file\n", argv[1]);
-        }
-        else
-        {
-            /* Collect all the information from each chunk */
-            process_png_chunk(png_format->p_IHDR, p_IHDR_data, png_file);
-            process_png_chunk(png_format->p_IDAT, p_IDAT_data, png_file);
-            process_png_chunk(png_format->p_IEND, p_IEND_data, png_file);
-
-            /* Fill out the IHDR data structure */
-            get_png_data_IHDR(png_format->p_IHDR, &concatenated_png_images[i-1].IHDR_data);
-
-            U64 length = (1 + (4*get_png_width(&concatenated_png_images[i-1].IHDR_data)))*(get_png_height(&concatenated_png_images[i-1].IHDR_data));
-
-            concatenated_png_images[i-1].IDAT_uncompressed_data = (U8 *)malloc(sizeof(U8) * (length));
-            mem_inf(concatenated_png_images[i-1].IDAT_uncompressed_data, &concatenated_png_images[i-1].IDAT_uncompressed_length, png_format->p_IDAT->p_data, png_format->p_IDAT->length);
-
-            /* Compute CRC checks */
-            check_crc_value(png_format->p_IHDR);
-            check_crc_value(png_format->p_IDAT);
-            check_crc_value(png_format->p_IEND);
-        }
-
-        /* Clear all dynamically allocated memory */
-        free(png_file_header);
-
-        free(p_IHDR_data);
-        free(p_IDAT_data);
-        free(p_IEND_data);
-
-        free(IHDR_struct_data);
-
-        free(png_format->p_IHDR);
-        free(png_format->p_IDAT);
-        free(png_format->p_IEND);
-        free(png_format);
-
-        /* Close the png file that was opened */
-        fclose(png_file);
-    }
-
-    U64 total_concatenated_length = 0;
-    U32 total_concatentaed_height = 0;
-    for(int i = 0; i < (argc-1); i++)
-    {
-        total_concatenated_length += concatenated_png_images[i].IDAT_uncompressed_length;
-        total_concatentaed_height += concatenated_png_images[i].IHDR_data.height;
-    }
-
-    U8 *IDAT_concatenated_uncompressed = (U8 *)malloc(total_concatenated_length * sizeof(U8));
-    U64 offset = 0;
-    for(int i = 0; i < (argc-1); i++)
-    {
-        memcpy(IDAT_concatenated_uncompressed + offset, concatenated_png_images[i].IDAT_uncompressed_data, concatenated_png_images[i].IDAT_uncompressed_length);
-        offset += concatenated_png_images[i].IDAT_uncompressed_length;
-    }
-
-    U8 *IDAT_concatenated_compressed = (U8 *)malloc(total_concatenated_length * sizeof(U8));
-    U64 IDAT_concatednated_compressed_length = 0;
-    int ret = 0;
-    ret = mem_def(IDAT_concatenated_compressed, &IDAT_concatednated_compressed_length, IDAT_concatenated_uncompressed, total_concatenated_length, Z_DEFAULT_COMPRESSION);
-    if (ret == 0) { /* success */
-        printf("original len = %ld, len_def = %lu\n", total_concatenated_length, IDAT_concatednated_compressed_length);
-    } else { /* failure */
-        fprintf(stderr,"mem_def failed. ret = %d.\n", ret);
-        return ret;
-    }
-
+    /* Write png header */
     U8 png_byte_header[PNG_SIG_SIZE];
     png_byte_header[0] = 137; //89
     png_byte_header[1] = 80;  //50
@@ -133,87 +213,105 @@ int main(int argc, char **argv)
     png_byte_header[6] = 26;  //1A
     png_byte_header[7] = 10;  //0A
 
-    simple_PNG_p new_png = (simple_PNG_p)malloc(sizeof(struct simple_PNG));
-    new_png->p_IHDR = (chunk_p)malloc(sizeof(struct chunk));
-    new_png->p_IDAT = (chunk_p)malloc(sizeof(struct chunk));
-    new_png->p_IEND = (chunk_p)malloc(sizeof(struct chunk));
+    new_png_file->png_file_header = png_byte_header;
+    fwrite(new_png_file->png_file_header, 1, PNG_SIG_SIZE, save_png_file);
 
-    data_IHDR_p new_png_IHDR_struct_data = (data_IHDR_p)malloc(sizeof(DATA_IHDR_SIZE));
-    new_png_IHDR_struct_data->width = concatenated_png_images[0].IHDR_data.width;
-    new_png_IHDR_struct_data->height = total_concatentaed_height;
-    new_png_IHDR_struct_data->bit_depth = concatenated_png_images[0].IHDR_data.bit_depth;
-    new_png_IHDR_struct_data->color_type = concatenated_png_images[0].IHDR_data.color_type;
-    new_png_IHDR_struct_data->compression = concatenated_png_images[0].IHDR_data.compression;
-    new_png_IHDR_struct_data->filter = concatenated_png_images[0].IHDR_data.filter;
-    new_png_IHDR_struct_data->interlace = concatenated_png_images[0].IHDR_data.interlace;
-    U8 temp[13];
-    temp[0] = (new_png_IHDR_struct_data->width >> 24) & 0xFF;
-    temp[1] = (new_png_IHDR_struct_data->width >> 16) & 0xFF;
-    temp[2] = (new_png_IHDR_struct_data->width >> 8) & 0xFF;
-    temp[3] = new_png_IHDR_struct_data->width & 0xFF;
+    populate_IHDR_png_chunk(new_png_file, old_png_file, IHDR_data, new_png_height);
+    populate_IDAT_png_chunk(new_png_file->png_format->p_IDAT, concated_IDAT_data, new_png_file_length);
+    populate_IEND_png_chunk(new_png_file->png_format->p_IEND);
 
-    temp[4] = (new_png_IHDR_struct_data->height >> 24) & 0xFF;
-    temp[5] = (new_png_IHDR_struct_data->height >> 16) & 0xFF;
-    temp[6] = (new_png_IHDR_struct_data->height >> 8) & 0xFF;
-    temp[7] = new_png_IHDR_struct_data->height & 0xFF;
+    write_png_chunk(new_png_file->png_format->p_IHDR, save_png_file);
+    write_png_chunk(new_png_file->png_format->p_IDAT, save_png_file);
+    write_png_chunk(new_png_file->png_format->p_IEND, save_png_file);
 
-    temp[8] = new_png_IHDR_struct_data->bit_depth;
-    temp[9] = new_png_IHDR_struct_data->color_type;
-    temp[10] = new_png_IHDR_struct_data->compression;
-    temp[11] = new_png_IHDR_struct_data->filter;
-    temp[12] = new_png_IHDR_struct_data->interlace;
+    fclose(save_png_file);
 
-    new_png->p_IHDR->length = 13;
-    new_png->p_IHDR->type[0] = 'I';
-    new_png->p_IHDR->type[1] = 'H';
-    new_png->p_IHDR->type[2] = 'D';
-    new_png->p_IHDR->type[3] = 'R';
-    new_png->p_IHDR->p_data = temp;
-    new_png->p_IHDR->crc = calculate_crc_value(new_png->p_IHDR);
+    return 0;
+}
 
-    new_png->p_IDAT->length = IDAT_concatednated_compressed_length;
-    new_png->p_IDAT->type[0] = 'I';
-    new_png->p_IDAT->type[1] = 'D';
-    new_png->p_IDAT->type[2] = 'A';
-    new_png->p_IDAT->type[3] = 'T';
-    new_png->p_IDAT->p_data = IDAT_concatenated_compressed;
-    new_png->p_IDAT->crc = calculate_crc_value(new_png->p_IDAT);
+int main(int argc, char **argv)
+{
+    int png_files_are_good = 0;
+    int png_files_have_same_width = 0;
 
-    new_png->p_IEND->length = 0;
-    new_png->p_IEND->type[0] = 'I';
-    new_png->p_IEND->type[1] = 'E';
-    new_png->p_IEND->type[2] = 'N';
-    new_png->p_IEND->type[3] = 'D';
-    new_png->p_IEND->crc = calculate_crc_value(new_png->p_IEND);
+    /* Ensure there is atleast 2 arguments*/
+    if (argc < 3)
+    {
+        fprintf(stderr, "Usage: %s <png file> ... <png file>\n", argv[0]);
+        exit(1);
+    }
 
-    FILE *fs = fopen("all.png", "w");
-    fwrite(png_byte_header, 1, PNG_SIG_SIZE, fs);
+    /* Create all variables */
+    int total_number_of_images = (argc-1);
 
-    U32 IHDR_length = htonl(new_png->p_IHDR->length);
-    fwrite(&IHDR_length, 1, CHUNK_LEN_SIZE, fs);
-    fwrite(new_png->p_IHDR->type, 1, CHUNK_TYPE_SIZE, fs);
-    fwrite(new_png->p_IHDR->p_data, 1, new_png->p_IHDR->length, fs);
-    U32 IHDR_crc = htonl(new_png->p_IHDR->crc);
-    fwrite(&IHDR_crc, 1, CHUNK_CRC_SIZE, fs);
+    PNG_file_data_p png_images = (PNG_file_data_p)malloc(total_number_of_images * sizeof(struct PNG_file_data));
+    IDAT_uncompressed_data_p uncompressed_data_png_images = (IDAT_uncompressed_data_p)malloc(total_number_of_images * sizeof(struct IDAT_uncompressed_data));
 
-    /* IDAT Chunk */
-    U32 IDAT_length = htonl(new_png->p_IDAT->length);
-    fwrite(&IDAT_length, 1, CHUNK_LEN_SIZE, fs);
-    fwrite(new_png->p_IDAT->type, 1, CHUNK_TYPE_SIZE, fs);
-    fwrite(new_png->p_IDAT->p_data, 1, new_png->p_IDAT->length, fs);
-    U32 IDAT_crc = htonl(new_png->p_IDAT->crc);
-    fwrite(&IDAT_crc, 1, CHUNK_CRC_SIZE, fs);
+    U64 IDAT_concatenated_uncompressed_length = 0;
+    U8 *IDAT_concatenated_uncompressed = NULL;
+    U64 IDAT_concatenated_compressed_length = 0;
+    U8 *IDAT_concatenated_compressed = NULL;
 
-    /* IEND Chunk */
-    U32 IEND_length = htonl(new_png->p_IEND->length);
-    fwrite(&IEND_length, 1, CHUNK_LEN_SIZE, fs);
-    fwrite(new_png->p_IEND->type, 1, CHUNK_TYPE_SIZE, fs);
-    //fwrite(new_png->p_IDAT->p_data, 1, new_png->p_IDAT->length, fs);
-    U32 IEND_crc = htonl(new_png->p_IEND->crc);
-    fwrite(&IEND_crc, 1, CHUNK_CRC_SIZE, fs);
+    U32 concatenated_png_height = 0;
 
-    free(concatenated_png_images);
-    fclose(fs);
+    char *concatenated_file_name = "all.png";
+    PNG_file_data_p concatenated_png = (PNG_file_data_p)malloc(sizeof(struct PNG_file_data));
+
+    /* Loop through all png images and uncompress IDAT data */
+    for(int i = 1; i < argc; i++)
+    {
+        /* Process the png file and make sure everything is valid */
+        png_files_are_good = process_png_file(&png_images[i-1], argv[i]);
+        if(png_files_are_good != 0)
+        {
+            printf("%s PNG file is not good.\n", argv[i]);
+            exit(0);
+        }
+
+        /* Uncompress IDAT data for each png image */
+        uncompress_IDAT_image_data(&png_images[i-1], &uncompressed_data_png_images[i-1]);
+    }
+
+    /* Ensure the images have the same width */
+    png_files_have_same_width = png_files_same_width(png_images, total_number_of_images);
+    if(png_files_have_same_width != 0)
+    {
+        printf("The PNG files do not have the same width.\n");
+        exit(0);
+    }
+
+    /* Calculate the total length and height for concatenated uncompressed image */
+    calculate_concatenated_length_and_height(&IDAT_concatenated_uncompressed_length,
+                                             &concatenated_png_height,
+                                             total_number_of_images,
+                                             png_images,
+                                             uncompressed_data_png_images);
+
+    /* Concatenate the uncompressed images together */
+    IDAT_concatenated_uncompressed = concatenate_uncompressed_png_images(uncompressed_data_png_images,
+                                                                         IDAT_concatenated_uncompressed_length,
+                                                                         total_number_of_images);
+
+    /* Create a concatenated compressed image */
+    IDAT_concatenated_compressed = concatenate_compressed_IDAT(&IDAT_concatenated_compressed_length,
+                                                               IDAT_concatenated_uncompressed,
+                                                               IDAT_concatenated_uncompressed_length);
+
+    /* Create a new image */
+    create_new_png(concatenated_png,
+                   png_images,
+                   IDAT_concatenated_compressed,
+                   IDAT_concatenated_compressed_length,
+                   concatenated_png_height,
+                   concatenated_file_name);
+
+    /* Deallocate used memory */
+    free(concatenated_png);
+    free(IDAT_concatenated_compressed);
+    free(IDAT_concatenated_uncompressed);
+
+    free(uncompressed_data_png_images);
+    free(png_images);
 
     return 0;
 }

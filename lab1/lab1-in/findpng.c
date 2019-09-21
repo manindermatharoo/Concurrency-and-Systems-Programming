@@ -118,7 +118,7 @@ void list_dir(int *png_found, char *dir_name)
                 if(is_png(png_file_header, header_bytes) == 0)
                 {
                     *png_found = 0;
-                    printf("%s: A PNG file\n", full_path);
+                    printf("%s\n", full_path);
                 }
 
                 fclose(png_file);

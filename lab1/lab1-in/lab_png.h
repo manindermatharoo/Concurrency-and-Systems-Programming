@@ -21,6 +21,7 @@
 #define CHUNK_TYPE_SIZE 4 /* chunk type field size in bytes */
 #define CHUNK_CRC_SIZE  4 /* chunk CRC field size in bytes */
 #define DATA_IHDR_SIZE 13 /* IHDR chunk data field size */
+#define DATA_IEND_SIZE  0 /* IEND chunk data field size */
 
 /******************************************************************************
  * STRUCTURES and TYPEDEFS
@@ -59,13 +60,23 @@ typedef struct simple_PNG {
     struct chunk *p_IEND;
 } *simple_PNG_p;
 
-/* Data required for a png image to concatenate */
-typedef struct png_image_data
-{
+typedef struct PNG_file_data {
+    U8 *png_file_header; /* Stores the header of png file */
+
+    simple_PNG_p png_format; /* Stores the simple PNG chunks */
+
+    U8 *p_IHDR_data; /* Stores data from IHDR chunk */
+    U8 *p_IDAT_data; /* Stores data from IDAT chunk */
+    U8 *p_IEND_data; /* Stores data from IEND chunk */
+
+    data_IHDR_p IHDR_struct_data; /* Stores the IHDR data structure */
+} *PNG_file_data_p;
+
+/* Compressed IDAT information for png image */
+typedef struct IDAT_uncompressed_data {
     U8 *IDAT_uncompressed_data;
     U64 IDAT_uncompressed_length;
-    struct data_IHDR IHDR_data;
-} *png_image_data_p;
+} *IDAT_uncompressed_data_p;
 
 /******************************************************************************
  * FUNCTION PROTOTYPES
@@ -77,5 +88,9 @@ int get_png_data_IHDR(struct chunk *info, struct data_IHDR *out);
 
 /* declare your own functions prototypes here */
 int process_png_chunk(struct chunk *out, U8 *data, FILE *fp);
-U32 check_crc_value(struct chunk *out);
+int check_crc_value(struct chunk *out);
 U32 calculate_crc_value(struct chunk *out);
+
+void initialize_PNG_file_struct(struct PNG_file_data *png_image);
+
+int process_png_file(struct PNG_file_data *png_image, char *file_name);
