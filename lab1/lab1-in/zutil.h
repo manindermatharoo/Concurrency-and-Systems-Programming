@@ -1,5 +1,5 @@
 /**
- * @brief: header file of in memory deflation and inflation using zlib.
+ * @brief: header file of in memory deflation and inflation using zlib. 
  * Based on the zlib example zpipe.c at https://www.zlib.net/zlib_how.html
  *
  * Modification is
