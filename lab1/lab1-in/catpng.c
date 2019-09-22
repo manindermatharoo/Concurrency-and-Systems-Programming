@@ -232,9 +232,9 @@ int create_new_png(struct PNG_file_data *new_png_file,
 int main(int argc, char **argv)
 {
     /* Ensure there is atleast 2 arguments*/
-    if (argc < 3)
+    if (argc < 2)
     {
-        fprintf(stderr, "Usage: %s <png file> ... <png file>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <png file> ...\n", argv[0]);
         exit(1);
     }
 
