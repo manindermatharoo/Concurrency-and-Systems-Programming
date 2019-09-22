@@ -169,9 +169,9 @@ int process_png_file(struct PNG_file_data *png_image, char *file_name)
     /* Create all variables */
     initialize_PNG_file_struct(png_image);
 
-    int ret_IHDR_CRC_check;
-    int ret_IDAT_CRC_check;
-    int ret_IEND_CRC_check;
+    int ret_IHDR_CRC_check = 0;
+    int ret_IDAT_CRC_check = 0;
+    int ret_IEND_CRC_check = 0;
 
     /* Read the first 8 bytes of png file which should be the header */
     int header_bytes = fread(png_image->png_file_header, 1, PNG_SIG_SIZE, png_file);
@@ -196,11 +196,11 @@ int process_png_file(struct PNG_file_data *png_image, char *file_name)
         ret_IHDR_CRC_check = check_crc_value(png_image->png_format->p_IHDR);
         ret_IDAT_CRC_check = check_crc_value(png_image->png_format->p_IDAT);
         ret_IEND_CRC_check = check_crc_value(png_image->png_format->p_IEND);
-    }
 
-    if((ret_IHDR_CRC_check != 0) || (ret_IDAT_CRC_check != 0) || (ret_IEND_CRC_check != 0))
-    {
-        ret = 1;
+        if((ret_IHDR_CRC_check != 0) || (ret_IDAT_CRC_check != 0) || (ret_IEND_CRC_check != 0))
+        {
+            ret = 1;
+        }
     }
 
     /* Close the png file that was opened */
