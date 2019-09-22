@@ -231,7 +231,7 @@ int create_new_png(struct PNG_file_data *new_png_file,
 
 int main(int argc, char **argv)
 {
-    /* Ensure there is atleast 2 arguments*/
+    /* Ensure there is atleast 1 argument */
     if (argc < 2)
     {
         fprintf(stderr, "Usage: %s <png file> ...\n", argv[0]);
