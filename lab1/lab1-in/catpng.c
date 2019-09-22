@@ -231,9 +231,6 @@ int create_new_png(struct PNG_file_data *new_png_file,
 
 int main(int argc, char **argv)
 {
-    int png_files_are_good = 0;
-    int png_files_have_same_width = 0;
-
     /* Ensure there is atleast 2 arguments*/
     if (argc < 3)
     {
@@ -242,6 +239,10 @@ int main(int argc, char **argv)
     }
 
     /* Create all variables */
+    int png_files_are_good = 0;
+    int png_files_have_same_width = 0;
+    int IDAT_uncompression_successful = 0;
+
     int total_number_of_images = (argc-1);
 
     PNG_file_data_p png_images = (PNG_file_data_p)malloc(total_number_of_images * sizeof(struct PNG_file_data));
@@ -269,7 +270,12 @@ int main(int argc, char **argv)
         }
 
         /* Uncompress IDAT data for each png image */
-        uncompress_IDAT_image_data(&png_images[i-1], &uncompressed_data_png_images[i-1]);
+        IDAT_uncompression_successful = uncompress_IDAT_image_data(&png_images[i-1], &uncompressed_data_png_images[i-1]);
+        if(IDAT_uncompression_successful != 0)
+        {
+            printf("IDAT mem_inf uncompression not succesful.\n");
+            exit(0);
+        }
     }
 
     /* Ensure the images have the same width */
@@ -296,6 +302,13 @@ int main(int argc, char **argv)
     IDAT_concatenated_compressed = concatenate_compressed_IDAT(&IDAT_concatenated_compressed_length,
                                                                IDAT_concatenated_uncompressed,
                                                                IDAT_concatenated_uncompressed_length);
+
+    /* IDAT concatenated compression not successful */
+    if(IDAT_concatenated_compressed == NULL)
+    {
+        printf("IDAT mem_def uncompression not succesful.\n");
+        exit(0);
+    }
 
     /* Create a new image */
     create_new_png(concatenated_png,

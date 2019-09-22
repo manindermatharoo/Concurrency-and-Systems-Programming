@@ -76,6 +76,8 @@ void list_dir(int *png_found, char *dir_name)
     while((parent_dirent = readdir(parent_dir)) != NULL)
     {
         char *str_path = parent_dirent->d_name;  /* relative path name! */
+
+        /* convert from relative to full path */
         char full_path[strlen(dir_name) + 1 + strlen(str_path)];
         strcpy(full_path, dir_name);
         strcat(full_path, "/");
@@ -89,6 +91,7 @@ void list_dir(int *png_found, char *dir_name)
         else
         {
             char *type = file_type(full_path);
+
             const char *directory_type = "directory";
             const char *regular_type = "regular";
             const char *ignore_curr = ".";
@@ -124,6 +127,7 @@ void list_dir(int *png_found, char *dir_name)
                 fclose(png_file);
             }
         }
+        /* reset the full path */
         memset(full_path, 0, sizeof(full_path));
     }
 
@@ -145,8 +149,10 @@ int main(int argc, char **argv)
     /* so far a png hasn't been found */
     int png_found = 1;
 
+    /* list the directory and files associated */
     list_dir(&png_found, argv[1]);
 
+    /* did not find any png in a directory */
     if(png_found == 1)
     {
         printf("findpng: No PNG file found \n");
