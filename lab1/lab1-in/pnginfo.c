@@ -58,6 +58,7 @@ int process_png_chunk(struct chunk *out, U8 *data, FILE *fp)
         fread(data, 1, out->length, fp);
         out->p_data = data;
     }
+
     else
     {
         out->p_data = NULL;
@@ -121,78 +122,6 @@ int check_crc_value(struct chunk *out)
         }
         printf(" chunk CRC error: computed %x, expected %x \n", calculated_CRC, out->crc);
     }
-
-    return 0;
-}
-
-int main3 (int argc, char **argv)
-{
-    /* file extension accepted */
-    char *file_extension = ".png";
-
-    /* Ensure there is one argument or that the argument is a .png file*/
-    if (argc == 1 || argc > 2 || (strstr(argv[1], file_extension) == NULL)) {
-        fprintf(stderr, "Usage: %s <png file>\n", argv[0]);
-        exit(1);
-    }
-
-    /* Create all variables */
-    U8 png_file_header[PNG_SIG_SIZE];
-
-    simple_PNG_p png_format = (simple_PNG_p)malloc(sizeof(struct simple_PNG));
-    png_format->p_IHDR = (chunk_p)malloc(sizeof(struct chunk));
-    png_format->p_IDAT = (chunk_p)malloc(sizeof(struct chunk));
-    png_format->p_IEND = (chunk_p)malloc(sizeof(struct chunk));
-
-    U8 *p_IHDR_data = NULL; /* Stores data from IHDR chunk */
-    U8 *p_IDAT_data = NULL; /* Stores data from IDAT chunk */
-    U8 *p_IEND_data = NULL; /* Stores data from IEND chunk */
-
-    data_IHDR_p IHDR_struct_data = (data_IHDR_p)malloc(sizeof(DATA_IHDR_SIZE));
-
-    /* Open binary png file */
-    FILE *png_file = fopen(argv[1], "rb");
-
-    /* Read the first 8 bytes of png file which should be the header */
-    int header_bytes = fread(png_file_header, 1, PNG_SIG_SIZE, png_file);
-
-    /* Make sure the file is a png before preceeding */
-    if(is_png(png_file_header, header_bytes) != 0)
-    {
-        printf("%s: Not a PNG file\n", argv[1]);
-    }
-    else
-    {
-        /* Collect all the information from each chunk */
-        process_png_chunk(png_format->p_IHDR, p_IHDR_data, png_file);
-        process_png_chunk(png_format->p_IDAT, p_IDAT_data, png_file);
-        process_png_chunk(png_format->p_IEND, p_IEND_data, png_file);
-
-        /* Fill out the IHDR data structure */
-        get_png_data_IHDR(png_format->p_IHDR, IHDR_struct_data);
-
-        printf("%s: %d x %d\n", argv[1], get_png_width(IHDR_struct_data), get_png_height(IHDR_struct_data));
-
-        /* Compute CRC checks */
-        check_crc_value(png_format->p_IHDR);
-        check_crc_value(png_format->p_IDAT);
-        check_crc_value(png_format->p_IEND);
-    }
-
-    /* Clear all dynamically allocated memory */
-    free(p_IHDR_data);
-    free(p_IDAT_data);
-    free(p_IEND_data);
-
-    free(IHDR_struct_data);
-
-    free(png_format->p_IHDR);
-    free(png_format->p_IDAT);
-    free(png_format->p_IEND);
-    free(png_format);
-
-    /* Close the png file that was opened */
-    fclose(png_file);
 
     return 0;
 }

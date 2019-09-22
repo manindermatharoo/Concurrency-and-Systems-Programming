@@ -27,6 +27,7 @@
  *****************************************************************************/
 typedef unsigned char U8;
 typedef unsigned int  U32;
+typedef unsigned long int U64;
 
 typedef struct chunk {
     U32 length;  /* length of data in the chunk, host byte order */
@@ -57,6 +58,13 @@ typedef struct simple_PNG {
     struct chunk *p_IDAT;  /* only handles one IDAT chunk */  
     struct chunk *p_IEND;
 } *simple_PNG_p;
+
+typedef struct image_data{
+    U8 *idat_uncompressed_data;
+    U32 height;
+    U32 width;
+    U64 size;
+} *image_data_p;
 
 /******************************************************************************
  * FUNCTION PROTOTYPES 
