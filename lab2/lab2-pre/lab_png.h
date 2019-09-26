@@ -65,10 +65,6 @@ typedef struct PNG_file_data {
 
     simple_PNG_p png_format; /* Stores the simple PNG chunks */
 
-    U8 *p_IHDR_data; /* Stores data from IHDR chunk */
-    U8 *p_IDAT_data; /* Stores data from IDAT chunk */
-    U8 *p_IEND_data; /* Stores data from IEND chunk */
-
     data_IHDR_p IHDR_struct_data; /* Stores the IHDR data structure */
 } *PNG_file_data_p;
 
@@ -96,10 +92,11 @@ U32 get_png_width(struct data_IHDR *buf);
 int get_png_data_IHDR(struct chunk *info, struct data_IHDR *out);
 
 /* declare your own functions prototypes here */
-int process_png_chunk(struct chunk *out, U8 *data, char *buf, int *buf_offset);
+int process_png_chunk(struct chunk *out, char *buf, int *buf_offset);
 int check_crc_value(struct chunk *out);
 U32 calculate_crc_value(struct chunk *out);
 
 void initialize_PNG_file_struct(struct PNG_file_data *png_image);
+void free_PNG_file_struct(struct PNG_file_data *png_image);
 
 int process_png_file(struct PNG_file_data *png_image, char *raw_png, int raw_png_size);

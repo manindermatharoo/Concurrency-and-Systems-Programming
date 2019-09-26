@@ -10,15 +10,15 @@
 #include "catpng.h"
 #include "lab_png.h"
 
-#define IMG_SERVER1_URL "http://ece252-1.uwaterloo.ca:2520/image?img=1"
-#define IMG_SERVER2_URL "http://ece252-1.uwaterloo.ca:2520/image?img=2"
-#define IMG_SERVER3_URL "http://ece252-1.uwaterloo.ca:2520/image?img=3"
+#define IMG1_URL "http://ece252-2.uwaterloo.ca:2520/image?img=1"
+#define IMG2_URL "http://ece252-2.uwaterloo.ca:2520/image?img=2"
+#define IMG3_URL "http://ece252-2.uwaterloo.ca:2520/image?img=3"
 
 #define DUM_URL "https://example.com/"
 #define ECE252_HEADER "X-Ece252-Fragment: "
 #define BUF_SIZE 1048576  /* 1024*1024 = 1M */
 #define BUF_INC  524288   /* 1024*512  = 0.5M */
-#define PNG_CHUNKS 50     /* Web Server contains 50 chunks of the image */
+#define TOTAL_PNG_CHUNKS 50     /* Web Server contains 50 chunks of the image */
 
 #define max(a, b) \
    ({ __typeof__ (a) _a = (a); \
@@ -62,11 +62,3 @@ size_t write_cb_curl3(char *p_recv, size_t size, size_t nmemb, void *p_userdata)
 int recv_buf_init(RECV_BUF *ptr, size_t max_size);
 
 int recv_buf_cleanup(RECV_BUF *ptr);
-
-/**
- * @brief output data in memory to a file
- * @param path const char *, output file path
- * @param in  void *, input data to be written to the file
- * @param len size_t, length of the input data in bytes
- */
-int write_file(const char *path, const void *in, size_t len);

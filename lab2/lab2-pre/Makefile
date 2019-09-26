@@ -2,7 +2,7 @@
 # Yiqing Huang, 2018/11/02
 
 CC = gcc
-CFLAGS = -Wall -std=c99 -g # "curl-config --cflags" output is empty
+CFLAGS = -Wall -std=c99 -g -ggdb3 # "curl-config --cflags" output is empty
 LD = gcc
 LDFLAGS = -std=c99 -g
 LDLIBS = -lcurl -lz # "curl-config --libs" output

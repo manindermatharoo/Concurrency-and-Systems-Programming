@@ -94,21 +94,21 @@ int populate_IHDR_png_chunk(struct PNG_file_data *png_file,
     png_file->png_format->p_IHDR->type[3] = 'R';
 
     /* Populate the IHDR p_data, only change height keep all the original the same */
-    IHDR_buf[0] = (original_png_file[0].IHDR_struct_data->width >> 24) & 0xFF;
-    IHDR_buf[1] = (original_png_file[0].IHDR_struct_data->width >> 16) & 0xFF;
-    IHDR_buf[2] = (original_png_file[0].IHDR_struct_data->width >> 8) & 0xFF;
-    IHDR_buf[3] = original_png_file[0].IHDR_struct_data->width & 0xFF;
+    IHDR_buf[0] = (original_png_file->IHDR_struct_data->width >> 24) & 0xFF;
+    IHDR_buf[1] = (original_png_file->IHDR_struct_data->width >> 16) & 0xFF;
+    IHDR_buf[2] = (original_png_file->IHDR_struct_data->width >> 8) & 0xFF;
+    IHDR_buf[3] = original_png_file->IHDR_struct_data->width & 0xFF;
 
     IHDR_buf[4] = (image_height >> 24) & 0xFF;
     IHDR_buf[5] = (image_height >> 16) & 0xFF;
     IHDR_buf[6] = (image_height >> 8) & 0xFF;
     IHDR_buf[7] = image_height & 0xFF;
 
-    IHDR_buf[8] = original_png_file[0].IHDR_struct_data->bit_depth;
-    IHDR_buf[9] = original_png_file[0].IHDR_struct_data->color_type;
-    IHDR_buf[10] = original_png_file[0].IHDR_struct_data->compression;
-    IHDR_buf[11] = original_png_file[0].IHDR_struct_data->filter;
-    IHDR_buf[12] = original_png_file[0].IHDR_struct_data->interlace;
+    IHDR_buf[8] = original_png_file->IHDR_struct_data->bit_depth;
+    IHDR_buf[9] = original_png_file->IHDR_struct_data->color_type;
+    IHDR_buf[10] = original_png_file->IHDR_struct_data->compression;
+    IHDR_buf[11] = original_png_file->IHDR_struct_data->filter;
+    IHDR_buf[12] = original_png_file->IHDR_struct_data->interlace;
 
     png_file->png_format->p_IHDR->p_data = IHDR_buf;
 
@@ -172,6 +172,10 @@ int write_png_chunk(struct chunk *out,
     {
         fwrite(out->p_data, 1, out->length, fs);
     }
+    else
+    {
+        out->p_data = NULL;
+    }
 
     /* Write the chunk CRC */
     U32 calculated_crc = htonl(out->crc);
@@ -200,7 +204,7 @@ int create_new_png(struct PNG_file_data *new_png_file,
     /* Create all variables */
     initialize_PNG_file_struct(new_png_file);
 
-    U8 IHDR_data[DATA_IHDR_SIZE];
+    U8 *IHDR_data = (U8 *)malloc(sizeof(U8) * DATA_IHDR_SIZE);
 
     /* Write png header */
     char png_byte_header[PNG_SIG_SIZE];
@@ -213,7 +217,8 @@ int create_new_png(struct PNG_file_data *new_png_file,
     png_byte_header[6] = 26;  //1A
     png_byte_header[7] = 10;  //0A
 
-    new_png_file->png_file_header = png_byte_header;
+    memcpy(new_png_file->png_file_header, png_byte_header, PNG_SIG_SIZE);
+
     fwrite(new_png_file->png_file_header, 1, PNG_SIG_SIZE, save_png_file);
 
     populate_IHDR_png_chunk(new_png_file, old_png_file, IHDR_data, new_png_height);
@@ -287,6 +292,12 @@ int concatenate_png_chunks(struct recv_buf *png_chunks,
                                              png_images,
                                              uncompressed_data_png_images);
 
+    /* Free up all the memory for png files except the first one so it can be used to create new IDAT */
+    for(int i = 1; i < image_count; i++)
+    {
+        free_PNG_file_struct(&png_images[i]);
+    }
+
     /* Concatenate the uncompressed images together */
     IDAT_concatenated_uncompressed = concatenate_uncompressed_png_images(uncompressed_data_png_images,
                                                                          IDAT_concatenated_uncompressed_length,
@@ -306,18 +317,25 @@ int concatenate_png_chunks(struct recv_buf *png_chunks,
 
     /* Create a new image */
     create_new_png(concatenated_png,
-                   png_images,
+                   &png_images[0],
                    IDAT_concatenated_compressed,
                    IDAT_concatenated_compressed_length,
                    concatenated_png_height,
                    concatenated_file_name);
 
     /* Deallocate used memory */
+    free_PNG_file_struct(concatenated_png);
     free(concatenated_png);
-    free(IDAT_concatenated_compressed);
+
+    for(int i = 0; i < image_count; i++)
+    {
+        free(uncompressed_data_png_images[i].IDAT_uncompressed_data);
+    }
+    free(uncompressed_data_png_images);
+
     free(IDAT_concatenated_uncompressed);
 
-    free(uncompressed_data_png_images);
+    free_PNG_file_struct(&png_images[0]);
     free(png_images);
 
     return 0;

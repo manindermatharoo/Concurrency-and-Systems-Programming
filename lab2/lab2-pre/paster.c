@@ -71,33 +71,6 @@ int recv_buf_cleanup(RECV_BUF *ptr)
     return 0;
 }
 
-int write_file(const char *path, const void *in, size_t len)
-{
-    FILE *fp = NULL;
-
-    if (path == NULL) {
-        fprintf(stderr, "write_file: file name is null!\n");
-        return -1;
-    }
-
-    if (in == NULL) {
-        fprintf(stderr, "write_file: input data is null!\n");
-        return -1;
-    }
-
-    fp = fopen(path, "wb");
-    if (fp == NULL) {
-        perror("fopen");
-        return -2;
-    }
-
-    if (fwrite(in, 1, len, fp) != len) {
-        fprintf(stderr, "write_file: imcomplete write!\n");
-        return -3;
-    }
-    return fclose(fp);
-}
-
 int command_line_options(int *argt, int *argn, int argc, char ** argv)
 {
     int option;
@@ -123,7 +96,7 @@ int command_line_options(int *argt, int *argn, int argc, char ** argv)
                     fprintf(stderr, "%s: %s 1, 2, or 3 -- 'n'\n", argv[0], str);
                     return -1;
                 }
-                printf("Web server chosen is %d.\n", *argn);
+                printf("Image chosen is %d.\n", *argn);
                 break;
             default:
                 return -1;
@@ -137,6 +110,7 @@ int main( int argc, char** argv )
 {
     int t = 1; /* number of threads being used; for single threaded deafult to 1 */
     int n = 1; /* select the web sever; defaults to webserver 1 */
+    int number_of_images_received = 0; /* total number of image chunks from the server */
 
     /* Check if command line arguments entered are correct */
     if(command_line_options(&t, &n, argc, argv) != 0)
@@ -144,28 +118,25 @@ int main( int argc, char** argv )
         return -1;
     }
 
-    RECV_BUF * png_images = (RECV_BUF *)malloc(PNG_CHUNKS * (sizeof(RECV_BUF)));
-
-    int number_of_images_received = 0;
-    CURL *curl_handle;
-    CURLcode res;
+    /* figure out which image you want to receive */
     char url[256];
-    RECV_BUF recv_buf;
-
     if(n == 1)
     {
-        strcpy(url, IMG_SERVER1_URL);
+        strcpy(url, IMG1_URL);
     }
     else if(n == 2)
     {
-        strcpy(url, IMG_SERVER2_URL);
+        strcpy(url, IMG2_URL);
     }
     else
     {
-       strcpy(url, IMG_SERVER3_URL);
+       strcpy(url, IMG3_URL);
     }
 
-    printf("%s: URL is %s\n", argv[0], url);
+    /* Initialize and setup cURL */
+    CURL *curl_handle;
+    CURLcode res;
+    RECV_BUF recv_buf;
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -193,17 +164,22 @@ int main( int argc, char** argv )
     /* some servers requires a user-agent field */
     curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
 
-    for(int i = 0; i < PNG_CHUNKS; i ++)
+    /* Create array of receive buffers for each png image chunk from the web server */
+    RECV_BUF * png_images = (RECV_BUF *)malloc(TOTAL_PNG_CHUNKS * (sizeof(RECV_BUF)));
+    memset(png_images, 0, TOTAL_PNG_CHUNKS * (sizeof(RECV_BUF)));
+    for(int i = 0; i < TOTAL_PNG_CHUNKS; i ++)
     {
-        recv_buf_init(&png_images[i], BUF_SIZE);
+        png_images[i].seq = -1;
     }
 
-    while(number_of_images_received < PNG_CHUNKS)
+    /* Loop until all png chunks have been stored */
+    while(number_of_images_received < TOTAL_PNG_CHUNKS)
     {
         recv_buf_init(&recv_buf, BUF_SIZE);
 
         /* get it! */
         res = curl_easy_perform(curl_handle);
+
         if( res != CURLE_OK)
         {
             fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
@@ -226,8 +202,12 @@ int main( int argc, char** argv )
     /* cleaning up */
     curl_easy_cleanup(curl_handle);
     curl_global_cleanup();
-    recv_buf_cleanup(&recv_buf);
 
+    for(int i = 0; i < TOTAL_PNG_CHUNKS; i ++)
+    {
+        recv_buf_cleanup(&png_images[i]);
+    }
     free(png_images);
+
     return 0;
 }

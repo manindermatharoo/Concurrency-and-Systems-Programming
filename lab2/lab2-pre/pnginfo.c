@@ -34,7 +34,7 @@ int is_png(char *buf)
     return file_is_png;
 }
 
-int process_png_chunk(struct chunk *out, U8 *data, char *buf, int *buf_offset)
+int process_png_chunk(struct chunk *out, char *buf, int *buf_offset)
 {
     /* Get the chunk data length */
     memcpy(&out->length, buf  + *buf_offset, CHUNK_LEN_SIZE);
@@ -48,10 +48,9 @@ int process_png_chunk(struct chunk *out, U8 *data, char *buf, int *buf_offset)
     /* Get the chunk data */
     if(out->length != 0)
     {
-        data = (U8 *)malloc(out->length * sizeof(U8));
-        memcpy(data, buf  + *buf_offset, out->length);
+        out->p_data = (U8 *)malloc(out->length * sizeof(U8));
+        memcpy(out->p_data, buf  + *buf_offset, out->length);
         *buf_offset += out->length;
-        out->p_data = data;
     }
     else
     {
@@ -141,11 +140,25 @@ void initialize_PNG_file_struct(struct PNG_file_data *png_image)
     png_image->png_format->p_IDAT = (chunk_p)malloc(sizeof(struct chunk));
     png_image->png_format->p_IEND = (chunk_p)malloc(sizeof(struct chunk));
 
-    png_image->p_IHDR_data = NULL;
-    png_image->p_IDAT_data = NULL;
-    png_image->p_IEND_data = NULL;
+    png_image->IHDR_struct_data = (data_IHDR_p)malloc(sizeof(struct data_IHDR));
+    memset(png_image->IHDR_struct_data, 0, sizeof(struct data_IHDR));
+}
 
-    png_image->IHDR_struct_data = (data_IHDR_p)malloc(sizeof(DATA_IHDR_SIZE));
+void free_PNG_file_struct(struct PNG_file_data *png_image)
+{
+    free(png_image->png_file_header);
+
+    free(png_image->png_format->p_IHDR->p_data);
+    free(png_image->png_format->p_IDAT->p_data);
+    free(png_image->png_format->p_IEND->p_data);
+
+    free(png_image->png_format->p_IHDR);
+    free(png_image->png_format->p_IDAT);
+    free(png_image->png_format->p_IEND);
+
+    free(png_image->png_format);
+
+    free(png_image->IHDR_struct_data);
 }
 
 int process_png_file(struct PNG_file_data *png_image, char *raw_png, int raw_png_size)
@@ -182,9 +195,9 @@ int process_png_file(struct PNG_file_data *png_image, char *raw_png, int raw_png
     else
     {
         /* Collect all the information from each chunk */
-        process_png_chunk(png_image->png_format->p_IHDR, png_image->p_IHDR_data, raw_png, &png_offset);
-        process_png_chunk(png_image->png_format->p_IDAT, png_image->p_IDAT_data, raw_png, &png_offset);
-        process_png_chunk(png_image->png_format->p_IEND, png_image->p_IEND_data, raw_png, &png_offset);
+        process_png_chunk(png_image->png_format->p_IHDR, raw_png, &png_offset);
+        process_png_chunk(png_image->png_format->p_IDAT, raw_png, &png_offset);
+        process_png_chunk(png_image->png_format->p_IEND, raw_png, &png_offset);
 
         /* Fill out the IHDR data structure */
         get_png_data_IHDR(png_image->png_format->p_IHDR, png_image->IHDR_struct_data);
