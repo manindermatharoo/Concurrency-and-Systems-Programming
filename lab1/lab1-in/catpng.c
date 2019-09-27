@@ -139,6 +139,7 @@ int main(int argc, char** argv){
 
     /* Update height of image in IHDR*/
     set_png_height(new_IHDR, height);
+    compute_crc(new_IHDR);
 
     /* Construct new IDAT */
     new_IDAT->length= (U32) concat_size_comp;
