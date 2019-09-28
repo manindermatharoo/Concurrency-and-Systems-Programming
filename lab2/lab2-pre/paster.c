@@ -15,7 +15,7 @@ size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata)
     return realsize;
 }
 
-size_t write_cb_curl3(char *p_recv, size_t size, size_t nmemb, void *p_userdata)
+size_t write_cb_curl(char *p_recv, size_t size, size_t nmemb, void *p_userdata)
 {
     size_t realsize = size * nmemb;
     RECV_BUF *p = (RECV_BUF *)p_userdata;
@@ -152,7 +152,7 @@ int main( int argc, char** argv )
     curl_easy_setopt(curl_handle, CURLOPT_URL, url);
 
     /* register write call back function to process received data */
-    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_cb_curl3);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_cb_curl);
     /* user defined data structure passed to the call back function */
     curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&recv_buf);
 
@@ -195,6 +195,10 @@ int main( int argc, char** argv )
             printf("%lu bytes received in memory %p, seq=%d.\n", \
                 png_images[recv_buf.seq].size, png_images[recv_buf.seq].buf, png_images[recv_buf.seq].seq);
         }
+        else
+        {
+            recv_buf_cleanup(&recv_buf);
+        }
     }
 
     concatenate_png_chunks(png_images, number_of_images_received);
@@ -205,7 +209,7 @@ int main( int argc, char** argv )
 
     for(int i = 0; i < TOTAL_PNG_CHUNKS; i ++)
     {
-        recv_buf_cleanup(&png_images[i]);
+        free(png_images[i].buf);
     }
     free(png_images);
 

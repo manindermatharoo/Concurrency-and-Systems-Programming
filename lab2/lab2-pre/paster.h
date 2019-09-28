@@ -57,7 +57,7 @@ size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata);
  *        This function maybe invoked more than once by one invokation of
  *        curl_easy_perform().
  */
-size_t write_cb_curl3(char *p_recv, size_t size, size_t nmemb, void *p_userdata);
+size_t write_cb_curl(char *p_recv, size_t size, size_t nmemb, void *p_userdata);
 
 int recv_buf_init(RECV_BUF *ptr, size_t max_size);
 
