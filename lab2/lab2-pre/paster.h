@@ -10,6 +10,7 @@
 #include "catpng.h"
 #include "lab_png.h"
 
+
 #define IMG1_URL "http://ece252-2.uwaterloo.ca:2520/image?img=1"
 #define IMG2_URL "http://ece252-2.uwaterloo.ca:2520/image?img=2"
 #define IMG3_URL "http://ece252-2.uwaterloo.ca:2520/image?img=3"

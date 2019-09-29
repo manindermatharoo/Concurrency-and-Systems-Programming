@@ -108,6 +108,10 @@ int command_line_options(int *argt, int *argn, int argc, char ** argv)
 
 int main( int argc, char** argv )
 {
+    // Use current time as
+    // seed for random generator
+    srand(time(0));
+
     int t = 1; /* number of threads being used; for single threaded deafult to 1 */
     int n = 1; /* select the web sever; defaults to webserver 1 */
     int number_of_images_received = 0; /* total number of image chunks from the server */
@@ -175,6 +179,16 @@ int main( int argc, char** argv )
     /* Loop until all png chunks have been stored */
     while(number_of_images_received < TOTAL_PNG_CHUNKS)
     {
+        /* Randomly pick a server between 1 and 3 to fetch image */
+        int upper = 3;
+        int lower = 1;
+        int int_num = (rand() % (upper - lower + 1)) + lower;
+        char num = (char)( ((int) '0') + int_num);
+        url[14] = num;
+
+        /* specify URL to get */
+        curl_easy_setopt(curl_handle, CURLOPT_URL, url);
+
         recv_buf_init(&recv_buf, BUF_SIZE);
 
         /* get it! */
