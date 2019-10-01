@@ -87,3 +87,4 @@ void compute_crc(chunk_p chunk);
 int write_png_file(simple_PNG_p png_p, char* file_name);
 void set_png_height(chunk_p chunk, U32 height);
 int write_png_chunk(chunk_p chunk, FILE* fp);
+int compare_png(simple_PNG_p png1, simple_PNG_p png2);

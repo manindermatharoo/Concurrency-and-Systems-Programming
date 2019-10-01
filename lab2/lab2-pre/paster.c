@@ -10,13 +10,11 @@ int main( int argc, char** argv )
 {
     CURLcode res;
     RECV_BUF recv_buf;
-    char* url = "http://ece252-1.uwaterloo.ca:2520/image?img=2";
+    char* url = "http://ece252-1.uwaterloo.ca:2520/image?img=1";
     simple_PNG_p pngs[NUM_SEGMENTS];
     int num_pngs_recieved = 0;
 
     /* Step 0: initialize global variables */
-    recv_buf_init(&recv_buf, BUF_SIZE);
-
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     for(int i = 0; i < NUM_SEGMENTS; i++){
@@ -31,6 +29,7 @@ int main( int argc, char** argv )
          * */
 
         CURL* curl_handle = curl_easy_init();
+        recv_buf_init(&recv_buf, BUF_SIZE);
 
         if (curl_handle == NULL) {
             return -1;
@@ -90,6 +89,7 @@ int main( int argc, char** argv )
          * */
 
         curl_easy_cleanup(curl_handle);
+        recv_buf_cleanup(&recv_buf);
     }
 
     /*
@@ -104,6 +104,5 @@ int main( int argc, char** argv )
      * */
 
     curl_global_cleanup();
-    recv_buf_cleanup(&recv_buf);
     return 0;
 }
