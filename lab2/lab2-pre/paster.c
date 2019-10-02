@@ -10,6 +10,8 @@
 #define OUTPUT_FILE "./output.png"
 #define DEFAULT_URL "http://ece252-1.uwaterloo.ca:2520/image?img=1"
 
+void cleanup(CURL* curl_handle, RECV_BUF* recv_buf );
+
 int main( int argc, char** argv )
 {
 
@@ -25,6 +27,9 @@ int main( int argc, char** argv )
 
     {
         char img;
+        int n;
+
+        char* url_pre = "http://ece252-1.uwaterloo.ca:2520/image?img=";
 
         for(int i = 1; i < argc; i++) {
             if (strlen(argv[i]) > 1 && i + 1 < argc && strlen(argv[i + 1]) == 1) {
@@ -35,8 +40,7 @@ int main( int argc, char** argv )
             }
         }
 
-        int n = atoi(&img);
-        char* url_pre = "http://ece252-1.uwaterloo.ca:2520/image?img=";
+        n = atoi(&img);
 
         if (n >= 1 && n <= 3) {
             strcpy(url, url_pre);
@@ -117,6 +121,16 @@ int main( int argc, char** argv )
         pngs[recv_buf.seq] = malloc(sizeof(struct simple_PNG));
         num_pngs_recieved++;
 
+        /* Check if the png is actually a png. If not discard and continue */
+        {
+            U8 png_sig[PNG_SIG_SIZE];
+            memcpy(png_sig, recv_buf.buf, PNG_SIG_SIZE);
+            if(is_png(png_sig, PNG_SIG_SIZE) != 0) {
+                cleanup(curl_handle, &recv_buf);
+                continue;
+            }
+        }
+
         int parse_ret = parse_png(pngs[recv_buf.seq], recv_buf.buf);
 
         if( parse_ret != 0 ){
@@ -128,8 +142,7 @@ int main( int argc, char** argv )
          * Step 4: Clean up and free variables
          * */
 
-        curl_easy_cleanup(curl_handle);
-        recv_buf_cleanup(&recv_buf);
+        cleanup(curl_handle, &recv_buf);
     }
 
     /*
@@ -145,4 +158,9 @@ int main( int argc, char** argv )
 
     curl_global_cleanup();
     return 0;
+}
+
+void cleanup(CURL* curl_handle, RECV_BUF* recv_buf_p ){
+    curl_easy_cleanup(curl_handle);
+    recv_buf_cleanup(recv_buf_p);
 }
