@@ -10,7 +10,7 @@
 #define OUTPUT_FILE "./output.png"
 #define DEFAULT_URL "http://ece252-1.uwaterloo.ca:2520/image?img=1"
 
-void cleanup(CURL* curl_handle, RECV_BUF* recv_buf );
+void cleanup(CURL* curl_handle, RECV_BUF* recv_buf_p );
 
 int main( int argc, char** argv )
 {
@@ -160,7 +160,7 @@ int main( int argc, char** argv )
     return 0;
 }
 
-void cleanup(CURL* curl_handle, RECV_BUF* recv_buf_p ){
+void cleanup (CURL* curl_handle, RECV_BUF* recv_buf_p ) {
     curl_easy_cleanup(curl_handle);
     recv_buf_cleanup(recv_buf_p);
 }

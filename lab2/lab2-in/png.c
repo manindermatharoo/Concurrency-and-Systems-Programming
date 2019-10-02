@@ -21,7 +21,7 @@ simple_PNG_p get_png_p() {
 
 }
 
-int parse_png(simple_PNG_p png_p, char* png_raw){
+int parse_png(simple_PNG_p png_p, char* png_raw) {
 
     png_p->p_IHDR = (chunk_p) malloc(sizeof(struct chunk));
     png_p->p_IDAT = (chunk_p) malloc(sizeof(struct chunk));
@@ -188,7 +188,6 @@ simple_PNG_p concat_pngs(int num_pngs, simple_PNG_p* pngs) {
     png_concat->p_IDAT = new_IDAT;
     png_concat->p_IEND = new_IEND;
 
-    write_png_file(png_concat, "./output2.png");
     return png_concat;
 
 }
@@ -284,4 +283,65 @@ int write_png_chunk(chunk_p chunk, FILE* fp){
     fwrite(&crc_n, 1, CHUNK_CRC_SIZE, fp);
 
     return 0;
+}
+
+/*
+ * Return 0 if the pngs are the same
+ * 1 if they are different
+ */
+
+int compare_png(simple_PNG_p png1, simple_PNG_p png2) {
+
+    /* Compare lengths */
+
+    if (png1->p_IDAT->length != png2->p_IDAT->length){
+        return 1;
+    }
+
+    /* Compare IDAT */
+
+    for(int i = 0; i < png1->p_IHDR->length; i++) {
+        if (png1->p_IDAT->p_data[i] != png2->p_IDAT->p_data[i]) {
+            return 1;
+        }
+    }
+
+    /* Return a value of 0 if the pngs are the same */
+    return 0;
+}
+
+int is_png(U8 *buf, size_t n)
+{
+    int file_is_png = 0;
+
+    /* make sure that the file header was at least 8 bytes */
+    if(n < 8)
+    {
+        file_is_png = 1;
+    }
+    else
+    {
+        /* Create array that matches header of a png file */
+        U8 png_byte_header[n];
+        png_byte_header[0] = 137; //89
+        png_byte_header[1] = 80;  //50
+        png_byte_header[2] = 78;  //4E
+        png_byte_header[3] = 71;  //47
+        png_byte_header[4] = 13;  //0D
+        png_byte_header[5] = 10;  //0A
+        png_byte_header[6] = 26;  //1A
+        png_byte_header[7] = 10;  //0A
+
+        /* Make sure the header of the file matches a png header */
+        for(int i = 0; i < n; i++)
+        {
+            if(buf[i] != png_byte_header[i])
+            {
+                file_is_png = 1;
+                break;
+            }
+        }
+    }
+
+    return file_is_png;
 }
