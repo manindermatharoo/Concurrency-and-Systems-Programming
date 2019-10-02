@@ -2,17 +2,54 @@
 #include "png.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <argp.h>
 
 #define NUM_SEGMENTS 50
 #define OUTPUT_FILE "./output.png"
+#define DEFAULT_URL "http://ece252-1.uwaterloo.ca:2520/image?img=1"
 
 int main( int argc, char** argv )
 {
+
     CURLcode res;
     RECV_BUF recv_buf;
-    char* url = "http://ece252-1.uwaterloo.ca:2520/image?img=1";
+    char* url;
     simple_PNG_p pngs[NUM_SEGMENTS];
     int num_pngs_recieved = 0;
+
+    url = malloc(strlen(DEFAULT_URL));
+
+    /* Parse arguments */
+
+    {
+        char img;
+
+        for(int i = 1; i < argc; i++) {
+            if (strlen(argv[i]) > 1 && i + 1 < argc && strlen(argv[i + 1]) == 1) {
+                if( strcmp(argv[i], "-n") == 0 ) {
+                    img = (char) argv[i + 1][0];
+                    continue;
+                }
+            }
+        }
+
+        int n = atoi(&img);
+        char* url_pre = "http://ece252-1.uwaterloo.ca:2520/image?img=";
+
+        if (n >= 1 && n <= 3) {
+            strcpy(url, url_pre);
+            strcat(url, &img);
+        }
+        else {
+            strcpy(url, DEFAULT_URL);
+        }
+
+    }
+
+    printf("URL is %s\n", url);
+
 
     /* Step 0: initialize global variables */
     curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -21,6 +58,9 @@ int main( int argc, char** argv )
         pngs[i] = NULL;
     }
 
+    /*
+     * Main loop for single-threaded implementation
+     */
 
     while(num_pngs_recieved != NUM_SEGMENTS){
 
