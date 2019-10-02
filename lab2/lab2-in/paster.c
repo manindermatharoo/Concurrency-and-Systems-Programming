@@ -11,12 +11,16 @@
 int main( int argc, char** argv )
 {
 
-    char* url;
+    char* url[3];
     simple_PNG_p pngs[NUM_SEGMENTS];
     int num_pngs_recieved = 0;
     int num_threads;
+    int url_index = 0;
 
-    url = malloc(strlen(DEFAULT_URL));
+    url[0] = malloc(strlen(DEFAULT_URL));
+    url[1] = malloc(strlen(DEFAULT_URL));
+    url[2] = malloc(strlen(DEFAULT_URL));
+
     num_threads = DEFAULT_NUM_THREADS;
 
     {
@@ -25,7 +29,7 @@ int main( int argc, char** argv )
         int t = 1;
         int n = 1;
         char *str = "option requires an argument";
-        char* url_pre = "http://ece252-1.uwaterloo.ca:2520/image?img=";
+        char* url_template = "http://ece252-%i.uwaterloo.ca:2520/image?img=%i";
 
         while ((c = getopt (argc, argv, "t:n:")) != -1) {
             switch (c) {
@@ -49,10 +53,10 @@ int main( int argc, char** argv )
         }
 
         num_threads = t;
-        char img = n + '0';
 
-        strcpy(url, url_pre);
-        strcat(url, &img);
+        for(int i = 0; i < 3; i ++) {
+            sprintf(url[i], url_template, i+1, n);
+        }
 
     }
 
@@ -62,7 +66,7 @@ int main( int argc, char** argv )
 
     RECV_BUF recv_bufs[num_threads];
 
-    printf("URL is %s\n", url);
+    printf("URL is %s\n", url[0]);
 
 
     /* Step 0: initialize global variables */
@@ -75,11 +79,12 @@ int main( int argc, char** argv )
     while(num_pngs_recieved != NUM_SEGMENTS) {
 
         for (int i=0; i<num_threads; i++) {
-            in_params[i].url = url;
+            in_params[i].url = url[url_index];
             in_params[i].pngs = pngs;
             in_params[i].recv_buf_p = &recv_bufs[i];
             in_params[i].num_pngs = &num_pngs_recieved;
             pthread_create(p_tids + i, NULL, get_image_from_server, in_params + i); 
+            url_index = (url_index + 1) % 3;
         }
 
         for (int i=0; i<num_threads; i++) {
