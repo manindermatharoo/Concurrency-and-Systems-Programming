@@ -254,7 +254,7 @@ int concatenate_png_chunks(struct recv_buf *png_chunks,
 
     U32 concatenated_png_height = 0;
 
-    char *concatenated_file_name = "all.png";
+    char *concatenated_file_name = "output.png";
     PNG_file_data_p concatenated_png = (PNG_file_data_p)malloc(sizeof(struct PNG_file_data));
 
     /* Loop through all png images and uncompress IDAT data */
