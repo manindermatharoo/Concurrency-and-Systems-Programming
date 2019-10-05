@@ -87,7 +87,9 @@ int command_line_options(int *argt, int *argn, int argc, char ** argv)
                     fprintf(stderr, "%s: %s > 0 -- 't'\n", argv[0], str);
                     return -1;
                 }
+#ifdef DEBUG_1
                 printf("Number of threads selected are %d.\n", *argt);
+#endif
                 break;
             case 'n':
                 *argn = strtoul(optarg, NULL, 10);
@@ -96,7 +98,9 @@ int command_line_options(int *argt, int *argn, int argc, char ** argv)
                     fprintf(stderr, "%s: %s 1, 2, or 3 -- 'n'\n", argv[0], str);
                     return -1;
                 }
+#ifdef DEBUG_1
                 printf("Image chosen is %d.\n", *argn);
+#endif
                 break;
             default:
                 return -1;
@@ -187,8 +191,10 @@ void *send_curl(void *arg)
 
             all_png_chunks->number_of_images_received++;
 
+#ifdef DEBUG_1
             printf("%lu bytes received in memory %p, seq=%d.\n", \
                 recv_buf.size, recv_buf.buf, recv_buf.seq);
+#endif
 
             all_png_chunks->checked_png_chunk[recv_buf.seq] = true;
         }
