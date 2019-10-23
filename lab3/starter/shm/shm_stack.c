@@ -1,12 +1,12 @@
 /*
- * The code is derived from 
+ * The code is derived from
  * Copyright(c) 2018-2019 Yiqing Huang, <yqhuang@uwaterloo.ca>.
  *
  * This software may be freely redistributed under the terms of the X11 License.
  */
 
 /**
- * @brief  stack to push/pop integers.   
+ * @brief  stack to push/pop integers.
  */
 
 #include <stdio.h>
@@ -73,6 +73,7 @@ int init_shm_stack(ISTACK *p, int stack_size)
 
     p->size = stack_size;
     p->pos  = -1;
+    printf("Size of IStack = %lu \n", sizeof(ISTACK));
     p->items = (int *) (p + sizeof(ISTACK));
     return 0;
 }
@@ -88,7 +89,7 @@ ISTACK *create_stack(int size)
 {
     int mem_size = 0;
     ISTACK *pstack = NULL;
-    
+
     if ( size == 0 ) {
         return NULL;
     }
@@ -135,7 +136,7 @@ int is_full(ISTACK *p)
 }
 
 /**
- * @brief check if the stack is empty 
+ * @brief check if the stack is empty
  * @param ISTACK *p the address of the ISTACK data structure
  * @return non-zero if the stack is empty; zero otherwise
  */
@@ -149,9 +150,9 @@ int is_empty(ISTACK *p)
 }
 
 /**
- * @brief push one ineger onto the stack 
+ * @brief push one ineger onto the stack
  * @param ISTACK *p the address of the ISTACK data structure
- * @param int item the integer to be pushed onto the stack 
+ * @param int item the integer to be pushed onto the stack
  * @return 0 on success; non-zero otherwise
  */
 
@@ -171,10 +172,10 @@ int push(ISTACK *p, int item)
 }
 
 /**
- * @brief push one ineger onto the stack 
+ * @brief push one ineger onto the stack
  * @param ISTACK *p the address of the ISTACK data structure
- * @param int *item output parameter to save the integer value 
- *        that pops off the stack 
+ * @param int *item output parameter to save the integer value
+ *        that pops off the stack
  * @return 0 on success; non-zero otherwise
  */
 

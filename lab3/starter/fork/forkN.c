@@ -1,4 +1,4 @@
-/* The code is 
+/* The code is
  * Copyright(c) 2018-2019 Yiqing Huang, <yqhuang@uwaterloo.ca>.
  *
  * This software may be freely redistributed under the terms of the X11 License.
@@ -6,7 +6,7 @@
 
 /**
  * @file   forkN.c
- * @brief  fork N child processes and time the overall execution time  
+ * @brief  fork N child processes and time the overall execution time
  */
 
 /******************************************************************************
@@ -50,21 +50,23 @@ int main()
         abort();
     }
     times[0] = (tv.tv_sec) + tv.tv_usec/1000000.;
-    
+
     for ( i = 0; i < NUM_CHILD; i++) {
-        
+
         pid = fork();
 
         if ( pid > 0 ) {        /* parent proc */
             cpids[i] = pid;
+            printf("Parent = %d \n", i);
         } else if ( pid == 0 ) { /* child proc */
+            printf("Child = %d \n", i);
             worker(i);
             break;
         } else {
             perror("fork");
             abort();
         }
-        
+
     }
 
     if ( pid > 0 ) {            /* parent process */
@@ -73,7 +75,7 @@ int main()
             if (WIFEXITED(state)) {
                 printf("Child cpid[%d]=%d terminated with state: %d.\n", i, cpids[i], state);
             }
-              
+
         }
         if (gettimeofday(&tv, NULL) != 0) {
             perror("gettimeofday");
