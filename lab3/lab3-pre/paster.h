@@ -15,6 +15,10 @@
 #include <sys/shm.h>
 #include <unistd.h>
 #include "shm_queue.h"
+#include "shm_stack.h"
+#include <time.h>
+#include <sys/time.h>
+#include <pthread.h>
 
 #define IMG1_URL "http://ece252-2.uwaterloo.ca:2520/image?img=1"
 #define IMG2_URL "http://ece252-2.uwaterloo.ca:2520/image?img=2"
@@ -42,16 +46,21 @@ typedef struct {
 /******************************************************************************
  * FUNCTION PROTOTYPES
  *****************************************************************************/
+int size_of_IDAT_formatted_data(int size);
 
-RECV_BUF send_curl(int img);
+void* send_curl(RECV_BUF* p_shm_recv_buf, int img, int img_part);
 
-void producer(sem_t* sems, circular_queue *p, int img);
+void extract_IDAT(RECV_BUF *img, U8* IDAT_data);
 
-void consumer(sem_t* sems, circular_queue *p);
+void producer(sem_t* sems, pthread_mutex_t* mutex, pthread_mutex_t* mutex_stack, circular_queue *p, int img, struct int_stack *s, int buf_size);
+
+void consumer(sem_t* sems, pthread_mutex_t* mutex, circular_queue *p, int sleep_ms, U8* IDAT_data, int buf_size);
 
 int command_line_options(arguments* args, int argc, char ** argv);
 
 int initializeSems(sem_t* sems, int buf_size);
+
+int sizeof_shm_recv_buf(size_t nbytes);
 
 /**
  * @brief  cURL header call back function to extract image sequence number from

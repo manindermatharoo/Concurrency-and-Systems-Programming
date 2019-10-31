@@ -1,18 +1,15 @@
 #include "catpng.h"
 
 int uncompress_IDAT_image_data(struct PNG_file_data *compressed_png_file,
-                               struct IDAT_uncompressed_data *compressed_png_info)
+                               U8 *compressed_png_IDAT)
 {
     int ret = 0;
 
     /* Calculate the length of the IDAT data after uncompression given by (1+4W)H */
-    compressed_png_info->IDAT_uncompressed_length = (1 + (4*get_png_width(compressed_png_file->IHDR_struct_data)))*(get_png_height(compressed_png_file->IHDR_struct_data));
-
-    /* Allocate enough space in the buffer that will contain uncompressed data */
-    compressed_png_info->IDAT_uncompressed_data = (U8 *)malloc(sizeof(U8) * (compressed_png_info->IDAT_uncompressed_length));
+    U64 IDAT_uncompressed_length = (1 + (4*get_png_width(compressed_png_file->IHDR_struct_data)))*(get_png_height(compressed_png_file->IHDR_struct_data));
 
     /* Uncompress IDAT data */
-    ret = mem_inf(compressed_png_info->IDAT_uncompressed_data, &compressed_png_info->IDAT_uncompressed_length, \
+    ret = mem_inf(compressed_png_IDAT, &IDAT_uncompressed_length, \
                   compressed_png_file->png_format->p_IDAT->p_data, compressed_png_file->png_format->p_IDAT->length);
 
     return ret;
@@ -36,14 +33,12 @@ int png_files_same_width(struct PNG_file_data *png_file,
 
 void calculate_concatenated_length_and_height(U64 *concatenated_png_length,
                                               U32 *total_concatenated_height,
-                                              int total_number_of_images,
-                                              struct PNG_file_data *png_file,
-                                              struct IDAT_uncompressed_data *uncompressed_png_info)
+                                              int total_number_of_images)
 {
     for(int i = 0; i < total_number_of_images; i++)
     {
-        *concatenated_png_length += uncompressed_png_info[i].IDAT_uncompressed_length;
-        *total_concatenated_height += png_file[i].IHDR_struct_data->height;
+        *concatenated_png_length += IMAGE_SIZE;
+        *total_concatenated_height += IMAGE_SEGMENT_HEIGHT;
     }
 }
 
@@ -55,7 +50,7 @@ U8 * concatenate_uncompressed_png_images(struct IDAT_uncompressed_data *uncompre
     U64 bytes_offset = 0;
     for(int i = 0; i < total_number_of_images; i++)
     {
-        memcpy(buf + bytes_offset, uncompressed_png_info[i].IDAT_uncompressed_data, uncompressed_png_info[i].IDAT_uncompressed_length);
+        memcpy(buf + bytes_offset, uncompressed_png_info[25].IDAT_uncompressed_data, uncompressed_png_info[i].IDAT_uncompressed_length);
         bytes_offset += uncompressed_png_info[i].IDAT_uncompressed_length;
     }
     return buf;
@@ -80,7 +75,6 @@ U8 * concatenate_compressed_IDAT(U64 *compressed_data_length,
 }
 
 int populate_IHDR_png_chunk(struct PNG_file_data *png_file,
-                            struct PNG_file_data *original_png_file,
                             U8 *IHDR_buf,
                             U32 image_height)
 {
@@ -94,21 +88,21 @@ int populate_IHDR_png_chunk(struct PNG_file_data *png_file,
     png_file->png_format->p_IHDR->type[3] = 'R';
 
     /* Populate the IHDR p_data, only change height keep all the original the same */
-    IHDR_buf[0] = (original_png_file->IHDR_struct_data->width >> 24) & 0xFF;
-    IHDR_buf[1] = (original_png_file->IHDR_struct_data->width >> 16) & 0xFF;
-    IHDR_buf[2] = (original_png_file->IHDR_struct_data->width >> 8) & 0xFF;
-    IHDR_buf[3] = original_png_file->IHDR_struct_data->width & 0xFF;
+    IHDR_buf[0] = (IMAGE_SEGMENT_WIDTH >> 24) & 0xFF;
+    IHDR_buf[1] = (IMAGE_SEGMENT_WIDTH >> 16) & 0xFF;
+    IHDR_buf[2] = (IMAGE_SEGMENT_WIDTH >> 8) & 0xFF;
+    IHDR_buf[3] = IMAGE_SEGMENT_WIDTH & 0xFF;
 
     IHDR_buf[4] = (image_height >> 24) & 0xFF;
     IHDR_buf[5] = (image_height >> 16) & 0xFF;
     IHDR_buf[6] = (image_height >> 8) & 0xFF;
     IHDR_buf[7] = image_height & 0xFF;
 
-    IHDR_buf[8] = original_png_file->IHDR_struct_data->bit_depth;
-    IHDR_buf[9] = original_png_file->IHDR_struct_data->color_type;
-    IHDR_buf[10] = original_png_file->IHDR_struct_data->compression;
-    IHDR_buf[11] = original_png_file->IHDR_struct_data->filter;
-    IHDR_buf[12] = original_png_file->IHDR_struct_data->interlace;
+    IHDR_buf[8] = 8;
+    IHDR_buf[9] = 6;
+    IHDR_buf[10] = 0;
+    IHDR_buf[11] = 0;
+    IHDR_buf[12] = 0;
 
     png_file->png_format->p_IHDR->p_data = IHDR_buf;
 
@@ -185,7 +179,6 @@ int write_png_chunk(struct chunk *out,
 }
 
 int create_new_png(struct PNG_file_data *new_png_file,
-                   struct PNG_file_data *old_png_file,
                    U8 *concated_IDAT_data,
                    U64 new_png_file_length,
                    U32 new_png_height,
@@ -221,7 +214,7 @@ int create_new_png(struct PNG_file_data *new_png_file,
 
     fwrite(new_png_file->png_file_header, 1, PNG_SIG_SIZE, save_png_file);
 
-    populate_IHDR_png_chunk(new_png_file, old_png_file, IHDR_data, new_png_height);
+    populate_IHDR_png_chunk(new_png_file, IHDR_data, new_png_height);
     populate_IDAT_png_chunk(new_png_file->png_format->p_IDAT, concated_IDAT_data, new_png_file_length);
     populate_IEND_png_chunk(new_png_file->png_format->p_IEND);
 
@@ -234,17 +227,17 @@ int create_new_png(struct PNG_file_data *new_png_file,
     return 0;
 }
 
-int concatenate_png_chunks(struct recv_buf *png_chunks,
+int concatenate_png_chunks(U8 *png_chunks_IDAT_data,
                            int image_count)
 {
     /* Create all variables */
-    int png_files_are_good = 0;
-    int png_files_have_same_width = 0;
-    int IDAT_uncompression_successful = 0;
+    // int png_files_are_good = 0;
+    // int png_files_have_same_width = 0;
+    // int IDAT_uncompression_successful = 0;
 
     int total_number_of_images = image_count;
 
-    PNG_file_data_p png_images = (PNG_file_data_p)malloc(total_number_of_images * sizeof(struct PNG_file_data));
+    // PNG_file_data_p png_images = (PNG_file_data_p)malloc(total_number_of_images * sizeof(struct PNG_file_data));
     IDAT_uncompressed_data_p uncompressed_data_png_images = (IDAT_uncompressed_data_p)malloc(total_number_of_images * sizeof(struct IDAT_uncompressed_data));
 
     U64 IDAT_concatenated_uncompressed_length = 0;
@@ -254,58 +247,56 @@ int concatenate_png_chunks(struct recv_buf *png_chunks,
 
     U32 concatenated_png_height = 0;
 
-    char *concatenated_file_name = "output.png";
+    char *concatenated_file_name = "all.png";
     PNG_file_data_p concatenated_png = (PNG_file_data_p)malloc(sizeof(struct PNG_file_data));
 
     /* Loop through all png images and uncompress IDAT data */
-    for(int i = 0; i < image_count; i++)
-    {
-        /* Process the png file and make sure everything is valid */
-        png_files_are_good = process_png_file(&png_images[i], png_chunks[i].buf, png_chunks[i].size);
-        if(png_files_are_good != 0)
-        {
-            printf("PNG file is not good %d.\n", png_chunks[i].seq);
-            exit(0);
-        }
+    // for(int i = 0; i < image_count; i++)
+    // {
+        // /* Process the png file and make sure everything is valid */
+        // png_files_are_good = process_png_file(&png_images[i], png_chunks[i].buf, png_chunks[i].size);
+        // if(png_files_are_good != 0)
+        // {
+        //     printf("PNG file is not good %d.\n", png_chunks[i].seq);
+        //     exit(0);
+        // }
 
-        /* Uncompress IDAT data for each png image */
-        IDAT_uncompression_successful = uncompress_IDAT_image_data(&png_images[i], &uncompressed_data_png_images[i]);
-        if(IDAT_uncompression_successful != 0)
-        {
-            printf("IDAT mem_inf uncompression not succesful.\n");
-            exit(0);
-        }
-    }
+        // /* Uncompress IDAT data for each png image */
+        // IDAT_uncompression_successful = uncompress_IDAT_image_data(&png_images[i], &uncompressed_data_png_images[i]);
+        // if(IDAT_uncompression_successful != 0)
+        // {
+        //     printf("IDAT mem_inf uncompression not succesful.\n");
+        //     exit(0);
+        // }
+    // }
 
     /* Ensure the images have the same width */
-    png_files_have_same_width = png_files_same_width(png_images, total_number_of_images);
-    if(png_files_have_same_width != 0)
-    {
-        printf("The PNG files do not have the same width.\n");
-        exit(0);
-    }
+    // png_files_have_same_width = png_files_same_width(png_images, total_number_of_images);
+    // if(png_files_have_same_width != 0)
+    // {
+    //     printf("The PNG files do not have the same width.\n");
+    //     exit(0);
+    // }
 
     /* Calculate the total length and height for concatenated uncompressed image */
     calculate_concatenated_length_and_height(&IDAT_concatenated_uncompressed_length,
                                              &concatenated_png_height,
-                                             total_number_of_images,
-                                             png_images,
-                                             uncompressed_data_png_images);
+                                             total_number_of_images);
 
     /* Free up all the memory for png files except the first one so it can be used to create new IDAT */
-    for(int i = 1; i < image_count; i++)
-    {
-        free_PNG_file_struct(&png_images[i]);
-    }
+    // for(int i = 1; i < image_count; i++)
+    // {
+    //     free_PNG_file_struct(&png_images[i]);
+    // }
 
     /* Concatenate the uncompressed images together */
-    IDAT_concatenated_uncompressed = concatenate_uncompressed_png_images(uncompressed_data_png_images,
-                                                                         IDAT_concatenated_uncompressed_length,
-                                                                         total_number_of_images);
+    // IDAT_concatenated_uncompressed = concatenate_uncompressed_png_images(png_chunks_IDAT_data->items,
+    //                                                                      IDAT_concatenated_uncompressed_length,
+    //                                                                      total_number_of_images);
 
     /* Create a concatenated compressed image */
     IDAT_concatenated_compressed = concatenate_compressed_IDAT(&IDAT_concatenated_compressed_length,
-                                                               IDAT_concatenated_uncompressed,
+                                                               png_chunks_IDAT_data,
                                                                IDAT_concatenated_uncompressed_length);
 
     /* IDAT concatenated compression not successful */
@@ -317,7 +308,6 @@ int concatenate_png_chunks(struct recv_buf *png_chunks,
 
     /* Create a new image */
     create_new_png(concatenated_png,
-                   &png_images[0],
                    IDAT_concatenated_compressed,
                    IDAT_concatenated_compressed_length,
                    concatenated_png_height,
@@ -327,16 +317,9 @@ int concatenate_png_chunks(struct recv_buf *png_chunks,
     free_PNG_file_struct(concatenated_png);
     free(concatenated_png);
 
-    for(int i = 0; i < image_count; i++)
-    {
-        free(uncompressed_data_png_images[i].IDAT_uncompressed_data);
-    }
     free(uncompressed_data_png_images);
 
     free(IDAT_concatenated_uncompressed);
-
-    free_PNG_file_struct(&png_images[0]);
-    free(png_images);
 
     return 0;
 }

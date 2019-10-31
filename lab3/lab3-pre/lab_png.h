@@ -23,6 +23,10 @@
 #define DATA_IHDR_SIZE 13 /* IHDR chunk data field size */
 #define DATA_IEND_SIZE  0 /* IEND chunk data field size */
 
+#define IMAGE_SEGMENT_WIDTH  400
+#define IMAGE_SEGMENT_HEIGHT 6
+#define IMAGE_SIZE 9606
+
 /******************************************************************************
  * STRUCTURES and TYPEDEFS
  *****************************************************************************/
@@ -70,9 +74,13 @@ typedef struct PNG_file_data {
 
 /* Compressed IDAT information for png image */
 typedef struct IDAT_uncompressed_data {
-    U8 *IDAT_uncompressed_data;
+    U8* IDAT_uncompressed_data;
     U64 IDAT_uncompressed_length;
 } *IDAT_uncompressed_data_p;
+
+typedef struct {
+    struct IDAT_uncompressed_data *items;
+} IDAT_use;
 
 /* This is a flattened structure, buf points to
    the memory address immediately after

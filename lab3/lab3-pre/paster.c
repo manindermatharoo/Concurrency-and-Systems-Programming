@@ -4,6 +4,12 @@
 #define SEM_PROC 1
 #define NUM_SEMS 2
 
+int size_of_IDAT_formatted_data(int size)
+{
+    int buffer_size = (1+(4*(IMAGE_SEGMENT_WIDTH)))*IMAGE_SEGMENT_HEIGHT;
+    return (buffer_size * size);
+}
+
 /**
  * @brief  cURL header call back function to extract image sequence number from
  *         http header data. An example header for image part n (assume n = 2) is:
@@ -53,7 +59,6 @@ size_t write_cb_curl(char *p_recv, size_t size, size_t nmemb, void *p_userdata)
         fprintf(stderr, "User buffer is too small, abort...\n");
         abort();
     }
-
     memcpy(p->buf + p->size, p_recv, realsize); /*copy data from libcurl*/
     p->size += realsize;
     p->buf[p->size] = 0;
@@ -93,56 +98,47 @@ int shm_recv_buf_init(RECV_BUF *ptr, size_t nbytes)
     return 0;
 }
 
-RECV_BUF send_curl(int img)
+void* send_curl(RECV_BUF* p_shm_recv_buf, int img, int img_part)
 {
     /* Use current time as seed for random generator */
-    // srand(time(0));
+    srand(time(0));
 
     /* Initialize and setup cURL */
     CURL *curl_handle;
     CURLcode res;
-    RECV_BUF p_shm_recv_buf;
 
-    shm_recv_buf_init(&p_shm_recv_buf, BUF_SIZE);
+    /* Randomly pick a server between 1 and 3 to fetch image */
+    int upper = 3;
+    int lower = 1;
+    int int_num = (rand() % (upper - lower + 1)) + lower;
 
-    char url[256] = "http://ece252-1.uwaterloo.ca:2530/image?img=1&part=20";
+    /* Create the url */
+    char url[256];
+    sprintf(url,"%s%d%s%d%s%d","http://ece252-", int_num, ".uwaterloo.ca:2530/image?img=", img, "&part=", img_part);
 
     /* init a curl session */
     curl_handle = curl_easy_init();
 
     if (curl_handle == NULL) {
         fprintf(stderr, "curl_easy_init: returned NULL\n");
+        return NULL;
     }
+
+    /* specify URL to get */
+    curl_easy_setopt(curl_handle, CURLOPT_URL, url);
 
     /* register write call back function to process received data */
     curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_cb_curl);
     /* user defined data structure passed to the call back function */
-    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&p_shm_recv_buf);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)p_shm_recv_buf);
 
     /* register header call back function to process received header data */
     curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, header_cb_curl);
     /* user defined data structure passed to the call back function */
-    curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, (void *)&p_shm_recv_buf);
+    curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, (void *)p_shm_recv_buf);
 
     /* some servers requires a user-agent field */
     curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
-
-    /* Randomly pick a server between 1 and 3 to fetch image */
-    // int upper = 3;
-    // int lower = 1;
-    // int int_num = (rand() % (upper - lower + 1)) + lower;
-    // int part = 2;
-    // // char num = (char)( ((int) '0') + int_num);
-    // char img_c = (char)( ((int) '0') + img);
-    // char part_c = (char)( ((int) '0') + part);
-    // // url[14] = num;
-    // url[43] = img_c;
-    // url[50] = part_c;
-
-    printf("Url = %s \n", url);
-
-    /* specify URL to get */
-    curl_easy_setopt(curl_handle, CURLOPT_URL, url);
 
     /* get it! */
     res = curl_easy_perform(curl_handle);
@@ -155,49 +151,130 @@ RECV_BUF send_curl(int img)
     /* cleaning up */
     curl_easy_cleanup(curl_handle);
 
-    return p_shm_recv_buf;
+    return NULL;
 }
 
-void producer(sem_t* sems, circular_queue *p, int img)
+void extract_IDAT(RECV_BUF *img, U8* IDAT_data)
 {
-    printf("here");
-    RECV_BUF item = send_curl(img);
-    printf("Here3");
-    if(sem_wait(&sems[0]) != 0)
-    {
-        perror("sem_wait on sem[0]");
-        abort();
-    }
-    enqueue(p, item);
-    printf("Producer enqueue item \n");
+    int png_files_are_good = 0;
+    struct PNG_file_data* temp = malloc(sizeof(struct PNG_file_data));
 
-    if(sem_post(&sems[1]) != 0)
+    png_files_are_good = process_png_file(temp, img->buf, img->size);
+    if(png_files_are_good != 0)
     {
-        perror("sem_wait on sem[0]");
-        abort();
+        printf("PNG file is not good %d.\n", img->seq);
+        printf("Img size = %ld \n", img->size);
     }
+    else
+    {
+        printf("PNG file is good \n");
+    }
+
+    /* Uncompress IDAT data for each png image */
+    int IDAT_uncompression_successful = 0;
+
+    IDAT_uncompression_successful = uncompress_IDAT_image_data(temp, IDAT_data + (img->seq * IMAGE_SIZE));
+
+    if(IDAT_uncompression_successful != 0)
+    {
+        printf("IDAT mem_inf uncompression not succesful.\n");
+    }
+
+    free(temp);
+}
+
+void producer(sem_t* sems, pthread_mutex_t* mutex, pthread_mutex_t* mutex_stack, circular_queue *p, int img, struct int_stack *s, int buf_size)
+{
+    RECV_BUF* item = (RECV_BUF*)malloc(sizeof(RECV_BUF) + BUF_SIZE);
+    int image_port = 0;
+    int end_producer = 0;
+
+    while(1)
+    {
+        memset(item, 0, sizeof(RECV_BUF) + BUF_SIZE);
+        shm_recv_buf_init(item, BUF_SIZE);
+
+        pthread_mutex_lock(mutex_stack);
+        if(pop(s, &image_port) != 0)
+        {
+            end_producer = 1;
+        }
+        pthread_mutex_unlock(mutex_stack);
+
+        if(end_producer == 1)
+        {
+            break;
+        }
+
+        send_curl(item, img, image_port);
+
+        if(sem_wait(&sems[0]) != 0)
+        {
+            perror("sem_wait on sem[0]");
+            abort();
+        }
+
+        pthread_mutex_lock(mutex);
+        enqueue(p, item);
+        pthread_mutex_unlock(mutex);
+
+        printf("Enqueued %lu bytes received in memory %p, seq=%d.\n",  \
+               item->size, item->buf, item->seq);
+
+        printf("Producer enqueue item \n");
+
+        if(sem_post(&sems[1]) != 0)
+        {
+            perror("sem_wait on sem[0]");
+            abort();
+        }
+    }
+
+    free(item);
+
+    printf("exiting producer \n");
+
     return;
 }
 
-void consumer(sem_t* sems, circular_queue *p)
+void consumer(sem_t* sems, pthread_mutex_t* mutex, circular_queue *p, int sleep_ms, U8* IDAT_data, int buf_size)
 {
-    if(sem_wait(&sems[1]) != 0)
+    RECV_BUF* ret = (RECV_BUF*)malloc(sizeof(RECV_BUF) + BUF_SIZE);
+    int items_received = 0;
+
+    while(items_received < 50)
     {
-        perror("sem_wait on sem[0]");
-        abort();
+        memset(ret, 0, sizeof(RECV_BUF) + BUF_SIZE);
+        shm_recv_buf_init(ret, BUF_SIZE);
+
+        usleep(sleep_ms * 1000);
+        if(sem_wait(&sems[1]) != 0)
+        {
+            perror("sem_wait on sem[0]");
+            abort();
+        }
+
+        pthread_mutex_lock(mutex);
+        dequeue(p, ret);
+        pthread_mutex_unlock(mutex);
+
+        items_received++;
+
+        extract_IDAT(ret, IDAT_data);
+
+        printf("Dequeued: %lu bytes received in memory %p, seq=%d.\n",  \
+                ret->size, ret->buf, ret->seq);
+
+        printf("Consumer takes an item \n");
+
+        if(sem_post(&sems[0]) != 0)
+        {
+            perror("sem_wait on sem[0]");
+            abort();
+        }
     }
 
-    RECV_BUF ret;
-    dequeue(p, &ret);
-    printf("Dequeued sequence = %d \n", ret.seq);
-
-    printf("Consumer takes an item \n");
-
-    if(sem_post(&sems[0]) != 0)
-    {
-        perror("sem_wait on sem[0]");
-        abort();
-    }
+    free(ret);
     return;
 }
 
@@ -264,6 +341,14 @@ int command_line_options(arguments* args, int argc, char ** argv)
 
 int main(int argc, char** argv)
 {
+    double times[2];
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) != 0) {
+        perror("gettimeofday");
+        abort();
+    }
+    times[0] = (tv.tv_sec) + tv.tv_usec/1000000.;
+
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     arguments args;
@@ -280,7 +365,7 @@ int main(int argc, char** argv)
     /* total number of child processes */
     pid_t child_pids[total_child_processes];
 
-    /* Semaphores for shared memory queue, [0] - spaces, [1] - items, [2] - protect buffer */
+    /* Semaphores for shared memory queue, [0] - spaces, [1] - items */
     sem_t *sems;
     int shmid_sems = shmget(IPC_PRIVATE, sizeof(sem_t) * NUM_SEMS, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
 
@@ -308,6 +393,27 @@ int main(int argc, char** argv)
         abort();
     }
 
+    /* Create a shared memory mutex */
+    pthread_mutex_t* mutex;
+    int shmid_mutex = shmget(IPC_PRIVATE, sizeof(pthread_mutex_t), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if (shmid_mutex == -1 )
+    {
+        perror("shmget");
+        abort();
+    }
+    mutex = shmat(shmid_mutex, NULL, 0);
+    pthread_mutex_init(mutex, NULL);
+
+    pthread_mutex_t* mutex_stack;
+    int shmid_mutex_stack = shmget(IPC_PRIVATE, sizeof(pthread_mutex_t), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if (shmid_mutex_stack == -1 )
+    {
+        perror("shmget");
+        abort();
+    }
+    mutex_stack = shmat(shmid_mutex_stack, NULL, 0);
+    pthread_mutex_init(mutex_stack, NULL);
+
     /* Create a shared memory queue */
     int shm_queue_size = sizeof_shm_queue(args.buf_size);
     int shmid_queue = shmget(IPC_PRIVATE, shm_queue_size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
@@ -319,6 +425,28 @@ int main(int argc, char** argv)
     circular_queue* p_queue;
     p_queue = shmat(shmid_queue, NULL, 0);
     init_shm_queue(p_queue, args.buf_size);
+
+    int shm_stack_size = sizeof_shm_stack(TOTAL_PNG_CHUNKS);
+    int shmid_stack = shmget(IPC_PRIVATE, shm_stack_size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if (shmid_stack == -1 ) {
+        perror("shmget");
+        abort();
+    }
+    struct int_stack *p_stack;
+    p_stack = shmat(shmid_stack, NULL, 0);
+    init_shm_stack(p_stack, TOTAL_PNG_CHUNKS);
+    push_all(p_stack, TOTAL_PNG_CHUNKS);
+
+    /* create shared memory to store all the IDAT inflated buffers and lengths */
+    int shm_IDAT_size = size_of_IDAT_formatted_data(TOTAL_PNG_CHUNKS);
+    int shmid_IDAT = shmget(IPC_PRIVATE, shm_IDAT_size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if (shmid_IDAT == -1 ) {
+        perror("shmget");
+        abort();
+    }
+    U8* IDAT_data;
+    IDAT_data = shmat(shmid_IDAT, NULL, 0);
+    // init_IDAT_use(IDAT_data);
 
     for(int i = 0; i < total_child_processes; i++)
     {
@@ -332,34 +460,32 @@ int main(int argc, char** argv)
         {
             if(i == total_child_processes - 1)
             {
-                consumer(sems, p_queue);
-
-                if(shmdt(sems) != 0)
-                {
-                    perror("shmdt");
-                    abort();
-                }
-                if(shmdt(p_queue) != 0)
-                {
-                    perror("shmdt");
-                    abort();
-                }
+                consumer(sems, mutex, p_queue, args.consumer_sleep_ms, IDAT_data, args.buf_size);
             }
             else
             {
-                printf("Child = %d \n", i);
-                producer(sems, p_queue, args.img_number);
+                producer(sems, mutex, mutex_stack, p_queue, args.img_number, p_stack, args.buf_size);
+            }
 
-                if(shmdt(sems) != 0)
-                {
-                    perror("shmdt");
-                    abort();
-                }
-                if(shmdt(p_queue) != 0)
-                {
-                    perror("shmdt");
-                    abort();
-                }
+            if(shmdt(sems) != 0)
+            {
+                perror("shmdt");
+                abort();
+            }
+            if(shmdt(p_queue) != 0)
+            {
+                perror("shmdt");
+                abort();
+            }
+            if(shmdt(IDAT_data) != 0)
+            {
+                perror("shmdt");
+                abort();
+            }
+            if(shmdt(mutex) != 0)
+            {
+                perror("shmdt");
+                abort();
             }
             break;
         }
@@ -377,6 +503,8 @@ int main(int argc, char** argv)
         {
             waitpid(child_pids[i], NULL, 0);
         }
+
+        concatenate_png_chunks(IDAT_data, TOTAL_PNG_CHUNKS);
 
         if(shmdt(sems) != 0)
         {
@@ -401,15 +529,63 @@ int main(int argc, char** argv)
             perror("shmdt");
             abort();
         }
+        if(shmdt(p_stack) != 0)
+        {
+            perror("shmdt");
+            abort();
+        }
+        if(shmdt(IDAT_data) != 0)
+        {
+            perror("shmdt");
+            abort();
+        }
+        if(shmdt(mutex) != 0)
+        {
+            perror("shmdt");
+            abort();
+        }
+        if(shmdt(mutex_stack) != 0)
+        {
+            perror("shmdt");
+            abort();
+        }
 
         if(shmctl(shmid_queue, IPC_RMID, NULL) == -1)
         {
             perror("shmctl");
             abort();
         }
-    }
+        if(shmctl(shmid_stack, IPC_RMID, NULL) == -1)
+        {
+            perror("shmctl");
+            abort();
+        }
+        if(shmctl(shmid_IDAT, IPC_RMID, NULL) == -1)
+        {
+            perror("shmctl");
+            abort();
+        }
+        if(shmctl(shmid_mutex, IPC_RMID, NULL) == -1)
+        {
+            perror("shmctl");
+            abort();
+        }
+        if(shmctl(shmid_mutex_stack, IPC_RMID, NULL) == -1)
+        {
+            perror("shmctl");
+            abort();
+        }
 
-    curl_global_cleanup();
+        curl_global_cleanup();
+
+        if (gettimeofday(&tv, NULL) != 0) {
+            perror("gettimeofday");
+            abort();
+        }
+        times[1] = (tv.tv_sec) + tv.tv_usec/1000000.;
+        printf("paster2 execution time: %.6lf seconds\n", times[1] - times[0]);
+
+    }
 
     return 0;
 }
