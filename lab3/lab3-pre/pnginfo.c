@@ -189,7 +189,7 @@ int process_png_file(struct PNG_file_data *png_image, char *raw_png, int raw_png
     /* Make sure the file is a png before preceeding */
     if(is_png(png_image->png_file_header) != 0)
     {
-        printf("Not a PNG file\n");
+        printf("Not a PNG file \n");
         ret = 1;
     }
     else

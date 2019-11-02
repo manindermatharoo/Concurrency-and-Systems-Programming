@@ -2,7 +2,7 @@
 
 int sizeof_shm_queue(int size)
 {
-    return (sizeof(circular_queue) + ((sizeof(RECV_BUF) + (sizeof(char) * BUF_SIZE)) * size));
+    return (sizeof(circular_queue) + ((sizeof(RECV_BUF)) * size));
 }
 
 int init_shm_queue(circular_queue *p, int queue_size)
@@ -15,6 +15,19 @@ int init_shm_queue(circular_queue *p, int queue_size)
     p->rear = -1;
     p->size = queue_size;
     p->items = (RECV_BUF *)p + sizeof(circular_queue);
+
+    return 0;
+}
+
+int init_shm_stack_RECV_BUF_buf(circular_queue *p, char *RECV_BUF_buf, int buf_size, int nbytes)
+{
+    for(int i = 0; i < buf_size; i++)
+    {
+        p->items[i].buf = RECV_BUF_buf + (i * BUF_SIZE);
+        p->items[i].size = 0;
+        p->items[i].max_size = nbytes;
+        p->items[i].seq = -1;              /* valid seq should be non-negative */
+    }
 
     return 0;
 }
@@ -37,7 +50,7 @@ int is_empty(circular_queue *p)
     return 0;
 }
 
-int enqueue(circular_queue *p, RECV_BUF *item)
+int enqueue(circular_queue *p, RECV_BUF *item, char *item_buf)
 {
     if(is_full(p))
     {
@@ -51,13 +64,16 @@ int enqueue(circular_queue *p, RECV_BUF *item)
             p->front = 0;
         }
         p->rear = (p->rear + 1) % p->size;
-        memcpy(&p->items[p->rear], item, sizeof(RECV_BUF) + BUF_SIZE);
-        // memcpy(&p->items + (p->rear * (sizeof(RECV_BUF) + (sizeof(char) * BUF_SIZE))), item, sizeof(RECV_BUF) + BUF_SIZE);
+        memcpy(&p->items[p->rear].size, &item->size, sizeof(item->size));
+        memcpy(&p->items[p->rear].max_size, &item->max_size, sizeof(item->max_size));
+        memcpy(&p->items[p->rear].seq, &item->seq, sizeof(item->seq));
+        memset(item_buf + (p->rear * BUF_SIZE), 0, BUF_SIZE);
+        memcpy(item_buf + (p->rear * BUF_SIZE), item->buf, BUF_SIZE);
     }
     return 0;
 }
 
-int dequeue(circular_queue *p, RECV_BUF *p_item)
+int dequeue(circular_queue *p, RECV_BUF *p_item, char *p_item_buf)
 {
     if(is_empty(p))
     {
@@ -66,8 +82,10 @@ int dequeue(circular_queue *p, RECV_BUF *p_item)
     }
     else
     {
-        memcpy(p_item, &p->items[p->front], sizeof(RECV_BUF) + BUF_SIZE);
-        // memcpy(p_item, &p->items + (p->front * (sizeof(RECV_BUF) + (sizeof(char) * BUF_SIZE))), sizeof(RECV_BUF) + BUF_SIZE);
+        memcpy(&p_item->size, &p->items[p->front].size, sizeof(p_item->size));
+        memcpy(&p_item->max_size, &p->items[p->front].max_size, sizeof(p_item->max_size));
+        memcpy(&p_item->seq, &p->items[p->front].seq, sizeof(p_item->seq));
+        memcpy(p_item->buf, p_item_buf + (p->front * BUF_SIZE), BUF_SIZE);
         if (p->front == p->rear){
             p->front = -1;
             p->rear = -1;

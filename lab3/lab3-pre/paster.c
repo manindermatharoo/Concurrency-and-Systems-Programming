@@ -90,7 +90,7 @@ int shm_recv_buf_init(RECV_BUF *ptr, size_t nbytes)
         return 1;
     }
 
-    ptr->buf = (char *)ptr + sizeof(RECV_BUF);
+    ptr->buf = (char *)malloc(BUF_SIZE);
     ptr->size = 0;
     ptr->max_size = nbytes;
     ptr->seq = -1;              /* valid seq should be non-negative */
@@ -156,42 +156,27 @@ void* send_curl(RECV_BUF* p_shm_recv_buf, int img, int img_part)
 
 void extract_IDAT(RECV_BUF *img, U8* IDAT_data)
 {
-    int png_files_are_good = 0;
     struct PNG_file_data* temp = malloc(sizeof(struct PNG_file_data));
 
-    png_files_are_good = process_png_file(temp, img->buf, img->size);
-    if(png_files_are_good != 0)
-    {
-        printf("PNG file is not good %d.\n", img->seq);
-        printf("Img size = %ld \n", img->size);
-    }
-    else
-    {
-        printf("PNG file is good \n");
-    }
+    process_png_file(temp, img->buf, img->size);
 
-    /* Uncompress IDAT data for each png image */
-    int IDAT_uncompression_successful = 0;
-
-    IDAT_uncompression_successful = uncompress_IDAT_image_data(temp, IDAT_data + (img->seq * IMAGE_SIZE));
-
-    if(IDAT_uncompression_successful != 0)
+    if((uncompress_IDAT_image_data(temp, IDAT_data + (img->seq * IMAGE_SIZE))) != 0)
     {
-        printf("IDAT mem_inf uncompression not succesful.\n");
+        printf("mem_inf failed \n");
     }
 
     free(temp);
 }
 
-void producer(sem_t* sems, pthread_mutex_t* mutex, pthread_mutex_t* mutex_stack, circular_queue *p, int img, struct int_stack *s, int buf_size)
+void producer(sem_t* sems, pthread_mutex_t* mutex, pthread_mutex_t* mutex_stack, circular_queue *p, char *queue_buf, int img, struct int_stack *s, int buf_size)
 {
-    RECV_BUF* item = (RECV_BUF*)malloc(sizeof(RECV_BUF) + BUF_SIZE);
+    RECV_BUF* item = (RECV_BUF*)malloc(sizeof(RECV_BUF));
     int image_port = 0;
     int end_producer = 0;
 
     while(1)
     {
-        memset(item, 0, sizeof(RECV_BUF) + BUF_SIZE);
+        memset(item, 0, sizeof(RECV_BUF));
         shm_recv_buf_init(item, BUF_SIZE);
 
         pthread_mutex_lock(mutex_stack);
@@ -207,6 +192,7 @@ void producer(sem_t* sems, pthread_mutex_t* mutex, pthread_mutex_t* mutex_stack,
         }
 
         send_curl(item, img, image_port);
+        printf("Retreived image segment \n");
 
         if(sem_wait(&sems[0]) != 0)
         {
@@ -215,39 +201,36 @@ void producer(sem_t* sems, pthread_mutex_t* mutex, pthread_mutex_t* mutex_stack,
         }
 
         pthread_mutex_lock(mutex);
-        enqueue(p, item);
+        enqueue(p, item, queue_buf);
         pthread_mutex_unlock(mutex);
-
-        printf("Enqueued %lu bytes received in memory %p, seq=%d.\n",  \
-               item->size, item->buf, item->seq);
-
-        printf("Producer enqueue item \n");
 
         if(sem_post(&sems[1]) != 0)
         {
             perror("sem_wait on sem[0]");
             abort();
         }
+
+        printf("Enqueued %lu bytes received in memory %p, seq=%d.\n", \
+                item->size, item->buf, item->seq);
+
+        free(item->buf);
     }
 
     free(item);
 
-    printf("exiting producer \n");
-
     return;
 }
 
-void consumer(sem_t* sems, pthread_mutex_t* mutex, circular_queue *p, int sleep_ms, U8* IDAT_data, int buf_size)
+void consumer(sem_t* sems, pthread_mutex_t* mutex, circular_queue *p, char *queue_buf, int sleep_ms, U8* IDAT_data, int buf_size)
 {
-    RECV_BUF* ret = (RECV_BUF*)malloc(sizeof(RECV_BUF) + BUF_SIZE);
+    RECV_BUF* ret = (RECV_BUF*)malloc(sizeof(RECV_BUF));
     int items_received = 0;
 
     while(items_received < 50)
     {
-        memset(ret, 0, sizeof(RECV_BUF) + BUF_SIZE);
+        memset(ret, 0, sizeof(RECV_BUF));
         shm_recv_buf_init(ret, BUF_SIZE);
 
-        usleep(sleep_ms * 1000);
         if(sem_wait(&sems[1]) != 0)
         {
             perror("sem_wait on sem[0]");
@@ -255,23 +238,26 @@ void consumer(sem_t* sems, pthread_mutex_t* mutex, circular_queue *p, int sleep_
         }
 
         pthread_mutex_lock(mutex);
-        dequeue(p, ret);
+        dequeue(p, ret, queue_buf);
         pthread_mutex_unlock(mutex);
-
-        items_received++;
-
-        extract_IDAT(ret, IDAT_data);
-
-        printf("Dequeued: %lu bytes received in memory %p, seq=%d.\n",  \
-                ret->size, ret->buf, ret->seq);
-
-        printf("Consumer takes an item \n");
 
         if(sem_post(&sems[0]) != 0)
         {
             perror("sem_wait on sem[0]");
             abort();
         }
+
+        printf("Dequeued %lu bytes received in memory %p, seq=%d.\n", \
+                ret->size, ret->buf, ret->seq);
+
+        usleep(sleep_ms * 1000);
+
+        extract_IDAT(ret, IDAT_data);
+
+        printf("Completed mem_inf \n");
+
+        free(ret->buf);
+        items_received++;
     }
 
     free(ret);
@@ -393,7 +379,7 @@ int main(int argc, char** argv)
         abort();
     }
 
-    /* Create a shared memory mutex */
+    /* Create a shared memory mutex used to protect the enqueue and dequeue of queue */
     pthread_mutex_t* mutex;
     int shmid_mutex = shmget(IPC_PRIVATE, sizeof(pthread_mutex_t), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if (shmid_mutex == -1 )
@@ -404,6 +390,7 @@ int main(int argc, char** argv)
     mutex = shmat(shmid_mutex, NULL, 0);
     pthread_mutex_init(mutex, NULL);
 
+    /* Create a shared memory mutex used to protect the popping of the stack */
     pthread_mutex_t* mutex_stack;
     int shmid_mutex_stack = shmget(IPC_PRIVATE, sizeof(pthread_mutex_t), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if (shmid_mutex_stack == -1 )
@@ -426,6 +413,7 @@ int main(int argc, char** argv)
     p_queue = shmat(shmid_queue, NULL, 0);
     init_shm_queue(p_queue, args.buf_size);
 
+    /* Create a shared memory stack to let the producers know which image segment to retreive */
     int shm_stack_size = sizeof_shm_stack(TOTAL_PNG_CHUNKS);
     int shmid_stack = shmget(IPC_PRIVATE, shm_stack_size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if (shmid_stack == -1 ) {
@@ -437,7 +425,7 @@ int main(int argc, char** argv)
     init_shm_stack(p_stack, TOTAL_PNG_CHUNKS);
     push_all(p_stack, TOTAL_PNG_CHUNKS);
 
-    /* create shared memory to store all the IDAT inflated buffers and lengths */
+    /* Create shared memory to store all the IDAT inflated buffers and lengths */
     int shm_IDAT_size = size_of_IDAT_formatted_data(TOTAL_PNG_CHUNKS);
     int shmid_IDAT = shmget(IPC_PRIVATE, shm_IDAT_size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if (shmid_IDAT == -1 ) {
@@ -446,7 +434,19 @@ int main(int argc, char** argv)
     }
     U8* IDAT_data;
     IDAT_data = shmat(shmid_IDAT, NULL, 0);
-    // init_IDAT_use(IDAT_data);
+
+    /* Create shared memory char buffer to store curl data into queue */
+    int shm_RECV_buf_size = (sizeof(char) * BUF_SIZE) * (args.buf_size);
+    int shmid_RECV_buf = shmget(IPC_PRIVATE, shm_RECV_buf_size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if (shmid_RECV_buf == -1 ) {
+        perror("shmget");
+        abort();
+    }
+    char* RECV_BUF_buf;
+    RECV_BUF_buf = shmat(shmid_RECV_buf, NULL, 0);
+    memset(RECV_BUF_buf, 0, shm_RECV_buf_size);
+
+    init_shm_stack_RECV_BUF_buf(p_queue, RECV_BUF_buf, args.buf_size, BUF_SIZE);
 
     for(int i = 0; i < total_child_processes; i++)
     {
@@ -460,11 +460,11 @@ int main(int argc, char** argv)
         {
             if(i == total_child_processes - 1)
             {
-                consumer(sems, mutex, p_queue, args.consumer_sleep_ms, IDAT_data, args.buf_size);
+                consumer(sems, mutex, p_queue, RECV_BUF_buf, args.consumer_sleep_ms, IDAT_data, args.buf_size);
             }
             else
             {
-                producer(sems, mutex, mutex_stack, p_queue, args.img_number, p_stack, args.buf_size);
+                producer(sems, mutex, mutex_stack, p_queue, RECV_BUF_buf, args.img_number, p_stack, args.buf_size);
             }
 
             if(shmdt(sems) != 0)
@@ -483,6 +483,11 @@ int main(int argc, char** argv)
                 abort();
             }
             if(shmdt(mutex) != 0)
+            {
+                perror("shmdt");
+                abort();
+            }
+            if(shmdt(RECV_BUF_buf) != 0)
             {
                 perror("shmdt");
                 abort();
@@ -549,6 +554,11 @@ int main(int argc, char** argv)
             perror("shmdt");
             abort();
         }
+        if(shmdt(RECV_BUF_buf) != 0)
+        {
+            perror("shmdt");
+            abort();
+        }
 
         if(shmctl(shmid_queue, IPC_RMID, NULL) == -1)
         {
@@ -571,6 +581,11 @@ int main(int argc, char** argv)
             abort();
         }
         if(shmctl(shmid_mutex_stack, IPC_RMID, NULL) == -1)
+        {
+            perror("shmctl");
+            abort();
+        }
+        if(shmctl(shmid_RECV_buf, IPC_RMID, NULL) == -1)
         {
             perror("shmctl");
             abort();
