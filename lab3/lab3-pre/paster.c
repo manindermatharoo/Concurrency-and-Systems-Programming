@@ -237,9 +237,6 @@ void consumer(sem_t* sems, int* consumer_numbers, circular_queue *p, char *queue
 
     while(1)
     {
-
-        usleep(sleep_ms * 1000);
-
         /* pthread_mutex_lock(mutex_stack); */
         /* printf("Consumer %i: waiting on num images mutex\n", pid); */
         sem_wait(&sems[4]);
@@ -280,6 +277,8 @@ void consumer(sem_t* sems, int* consumer_numbers, circular_queue *p, char *queue
             perror("sem_wait on sems[0]");
             abort();
         }
+
+        usleep(sleep_ms * 1000);
 
         /* printf("Consumer %i: Dequeued %lu bytes received in memory %p, seq=%d.\n", \ */
                 /* pid, ret->size, ret->buf, ret->seq); */
