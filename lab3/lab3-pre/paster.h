@@ -54,7 +54,7 @@ void extract_IDAT(RECV_BUF *img, U8* IDAT_data);
 
 void producer(sem_t* sems, pthread_mutex_t* mutex, pthread_mutex_t* mutex_stack, circular_queue *p, char *queue_buf, int img, struct int_stack *s, int buf_size);
 
-void consumer(sem_t* sems, pthread_mutex_t* mutex, circular_queue *p, char *queue_buf, int sleep_ms, U8* IDAT_data, int buf_size);
+void consumer(sem_t* sems, int* num_images_received, circular_queue *p, char *queue_buf, int sleep_ms, U8* IDAT_data, int buf_size);
 
 int command_line_options(arguments* args, int argc, char ** argv);
 

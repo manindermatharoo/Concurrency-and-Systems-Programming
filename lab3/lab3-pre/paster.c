@@ -2,7 +2,7 @@
 
 #define NUM_ARGUMENTS 5
 #define SEM_PROC 1
-#define NUM_SEMS 2
+#define NUM_SEMS 6
 
 int size_of_IDAT_formatted_data(int size)
 {
@@ -173,95 +173,145 @@ void producer(sem_t* sems, pthread_mutex_t* mutex, pthread_mutex_t* mutex_stack,
     RECV_BUF* item = (RECV_BUF*)malloc(sizeof(RECV_BUF));
     int image_port = 0;
     int end_producer = 0;
+    int pid = getpid();  /*process id*/
 
     while(1)
     {
-        memset(item, 0, sizeof(RECV_BUF));
-        shm_recv_buf_init(item, BUF_SIZE);
-
-        pthread_mutex_lock(mutex_stack);
+        /* pthread_mutex_lock(mutex_stack); */
+        /* printf("Producer %i: waiting on istack mutex\n", pid); */
+        sem_wait(&sems[3]);
         if(pop(s, &image_port) != 0)
         {
             end_producer = 1;
         }
-        pthread_mutex_unlock(mutex_stack);
+        sem_post(&sems[3]);
+        /* pthread_mutex_unlock(mutex_stack); */
 
         if(end_producer == 1)
         {
+            /* printf("Producer %i: exiting\n", pid); */
             break;
         }
 
-        send_curl(item, img, image_port);
-        printf("Retreived image segment \n");
+        memset(item, 0, sizeof(RECV_BUF));
+        shm_recv_buf_init(item, BUF_SIZE);
 
+        send_curl(item, img, image_port);
+        /* printf("Producer %i: Retreived image segment \n", pid); */
+
+        /* printf("Producer %i: waiting on spaces\n", pid); */
         if(sem_wait(&sems[0]) != 0)
         {
-            perror("sem_wait on sem[0]");
+            perror("sem_wait on sems[0]");
+            sem_post(&sems[0]);
             abort();
         }
 
-        pthread_mutex_lock(mutex);
+        /* printf("Producer %i: waiting on queue mutex\n", pid); */
+        /* pthread_mutex_lock(mutex); */
+        sem_wait(&sems[2]);
         enqueue(p, item, queue_buf);
-        pthread_mutex_unlock(mutex);
+        sem_post(&sems[2]);
+        /* pthread_mutex_unlock(mutex); */
 
         if(sem_post(&sems[1]) != 0)
         {
-            perror("sem_wait on sem[0]");
+            perror("sem_wait on sems[0]");
             abort();
         }
 
-        printf("Enqueued %lu bytes received in memory %p, seq=%d.\n", \
-                item->size, item->buf, item->seq);
+        /* printf("Enqueued %lu bytes received in memory %p, seq=%d.\n", \ */
+                /* item->size, item->buf, item->seq); */
 
         free(item->buf);
     }
 
     free(item);
 
-    return;
+    exit(0);
 }
 
-void consumer(sem_t* sems, pthread_mutex_t* mutex, circular_queue *p, char *queue_buf, int sleep_ms, U8* IDAT_data, int buf_size)
+void consumer(sem_t* sems, int* consumer_numbers, circular_queue *p, char *queue_buf, int sleep_ms, U8* IDAT_data, int buf_size)
 {
     RECV_BUF* ret = (RECV_BUF*)malloc(sizeof(RECV_BUF));
-    int items_received = 0;
+    int end_consumer = 0;
+    int pid = getpid();
 
-    while(items_received < 50)
+    while(1)
     {
-        memset(ret, 0, sizeof(RECV_BUF));
-        shm_recv_buf_init(ret, BUF_SIZE);
-
-        if(sem_wait(&sems[1]) != 0)
-        {
-            perror("sem_wait on sem[0]");
-            abort();
-        }
-
-        pthread_mutex_lock(mutex);
-        dequeue(p, ret, queue_buf);
-        pthread_mutex_unlock(mutex);
-
-        if(sem_post(&sems[0]) != 0)
-        {
-            perror("sem_wait on sem[0]");
-            abort();
-        }
-
-        printf("Dequeued %lu bytes received in memory %p, seq=%d.\n", \
-                ret->size, ret->buf, ret->seq);
 
         usleep(sleep_ms * 1000);
 
+        /* pthread_mutex_lock(mutex_stack); */
+        /* printf("Consumer %i: waiting on num images mutex\n", pid); */
+        sem_wait(&sems[4]);
+        if(consumer_numbers[0] == TOTAL_PNG_CHUNKS)
+        {
+            end_consumer= 1;
+        }
+        sem_post(&sems[4]);
+        /* pthread_mutex_unlock(mutex_stack); */
+
+        if(end_consumer == 1)
+        {
+            /* printf("Consumer %i: exiting\n", pid); */
+            break;
+        }
+
+        memset(ret, 0, sizeof(RECV_BUF));
+        shm_recv_buf_init(ret, BUF_SIZE);
+
+        /* printf("Consumer %i: waiting on item\n", pid); */
+
+        if(sem_wait(&sems[1]) != 0)
+        {
+            perror("sem_wait on sems[0]");
+            sem_post(&sems[1]);
+            abort();
+        }
+
+        /* printf("Consumer %i: waiting on queue mutex\n", pid); */
+        sem_wait(&sems[2]);
+        /* pthread_mutex_lock(mutex); */
+        dequeue(p, ret, queue_buf);
+        /* pthread_mutex_unlock(mutex); */
+        sem_post(&sems[2]);
+
+        if(sem_post(&sems[0]) != 0)
+        {
+            perror("sem_wait on sems[0]");
+            abort();
+        }
+
+        /* printf("Consumer %i: Dequeued %lu bytes received in memory %p, seq=%d.\n", \ */
+                /* pid, ret->size, ret->buf, ret->seq); */
+
         extract_IDAT(ret, IDAT_data);
 
-        printf("Completed mem_inf \n");
+        /* printf("Consumer %i: Completed mem_inf \n", pid); */
 
         free(ret->buf);
-        items_received++;
+
+        /* printf("Consumer %i: waiting on num images mutex\n", pid); */
+        sem_wait(&sems[4]);
+        consumer_numbers[0] += 1;
+        /* printf("Items received: %i\n", consumer_numbers[0]); */
+        if(consumer_numbers[0] == TOTAL_PNG_CHUNKS || consumer_numbers[1]> TOTAL_PNG_CHUNKS - consumer_numbers[0])
+        {
+            end_consumer= 1;
+            consumer_numbers[1]--;
+        }
+        sem_post(&sems[4]);
+
+        if(end_consumer == 1)
+        {
+            /* printf("Consumer %i: exiting. %i consumers active\n", pid, consumer_numbers[1]); */
+            break;
+        }
     }
 
     free(ret);
-    return;
+    exit(0);
 }
 
 int command_line_options(arguments* args, int argc, char ** argv)
@@ -294,9 +344,9 @@ int command_line_options(arguments* args, int argc, char ** argv)
                 break;
             case 3:
                 args->num_consumers = atoi(argv[i]);
-                if(args->num_consumers != 1)
+                if(args->num_consumers <= 0)
                 {
-                    printf("Number of consumers needs to be 1 \n");
+                    printf("Number of consumers can't be less than 1 \n");
                     return -1;
                 }
                 break;
@@ -370,12 +420,32 @@ int main(int argc, char** argv)
 
     if(sem_init(&sems[0], SEM_PROC, args.buf_size) != 0)
     {
-        perror("sem_init(sem[0])");
+        perror("sem_init(sems[0])");
         abort();
     }
     if(sem_init(&sems[1], SEM_PROC, 0) != 0)
     {
-        perror("sem_init(sem[1])");
+        perror("sem_init(sems[1])");
+        abort();
+    }
+    if(sem_init(&sems[2], SEM_PROC, 1) != 0)
+    {
+        perror("sem_init(sems[1])");
+        abort();
+    }
+    if(sem_init(&sems[3], SEM_PROC, 1) != 0)
+    {
+        perror("sem_init(sems[1])");
+        abort();
+    }
+    if(sem_init(&sems[4], SEM_PROC, 1) != 0)
+    {
+        perror("sem_init(sems[1])");
+        abort();
+    }
+    if(sem_init(&sems[5], SEM_PROC, args.num_consumers) != 0)
+    {
+        perror("sem_init(sems[1])");
         abort();
     }
 
@@ -398,8 +468,15 @@ int main(int argc, char** argv)
         perror("shmget");
         abort();
     }
+
     mutex_stack = shmat(shmid_mutex_stack, NULL, 0);
     pthread_mutex_init(mutex_stack, NULL);
+
+    int consumer_numbers_shmid = shmget(IPC_PRIVATE, 2*sizeof(int), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    int* consumer_numbers = shmat(consumer_numbers_shmid, NULL, 0);
+
+    consumer_numbers[0] = 0;
+    consumer_numbers[1] = args.num_consumers;
 
     /* Create a shared memory queue */
     int shm_queue_size = sizeof_shm_queue(args.buf_size);
@@ -447,7 +524,6 @@ int main(int argc, char** argv)
     memset(RECV_BUF_buf, 0, shm_RECV_buf_size);
 
     init_shm_stack_RECV_BUF_buf(p_queue, RECV_BUF_buf, args.buf_size, BUF_SIZE);
-
     for(int i = 0; i < total_child_processes; i++)
     {
         pid = fork();
@@ -458,9 +534,9 @@ int main(int argc, char** argv)
         }
         else if (pid == 0) /* child process */
         {
-            if(i == total_child_processes - 1)
+            if(i >= args.num_producers)
             {
-                consumer(sems, mutex, p_queue, RECV_BUF_buf, args.consumer_sleep_ms, IDAT_data, args.buf_size);
+                consumer(sems, consumer_numbers, p_queue, RECV_BUF_buf, args.consumer_sleep_ms, IDAT_data, args.buf_size);
             }
             else
             {
@@ -504,11 +580,14 @@ int main(int argc, char** argv)
 
     if(pid > 0) /* parent process left */
     {
+        
         for(int i = 0; i < total_child_processes; i++ )
         {
             waitpid(child_pids[i], NULL, 0);
+            /* printf("Successfully waited for process %i\n", child_pids[i]); */
         }
 
+        /* printf("Parent: About to concatenate them chunks\n"); */
         concatenate_png_chunks(IDAT_data, TOTAL_PNG_CHUNKS);
 
         if(shmdt(sems) != 0)

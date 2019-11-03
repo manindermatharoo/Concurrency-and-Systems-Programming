@@ -204,7 +204,7 @@ int pop(ISTACK *p, int *p_item)
         return -1;
     }
 
-    if ( !isEmpty(p) ) {
+    if ( !isEmpty(p)) {
         *p_item = p->items[p->pos];
         (p->pos)--;
         return 0;
