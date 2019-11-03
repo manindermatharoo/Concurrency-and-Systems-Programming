@@ -27,4 +27,3 @@ paster2: $(OBJS1)
 .PHONY: clean
 clean:
 	rm -f *~ *.d *.o $(TARGETS) *.png
-	../starter/tools/clean_ipcs.sh

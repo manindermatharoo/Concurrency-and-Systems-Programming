@@ -173,7 +173,6 @@ void producer(sem_t* sems, pthread_mutex_t* mutex, pthread_mutex_t* mutex_stack,
     RECV_BUF* item = (RECV_BUF*)malloc(sizeof(RECV_BUF));
     int image_port = 0;
     int end_producer = 0;
-    int pid = getpid();  /*process id*/
 
     while(1)
     {
@@ -235,7 +234,6 @@ void consumer(sem_t* sems, int* consumer_numbers, circular_queue *p, char *queue
 {
     RECV_BUF* ret = (RECV_BUF*)malloc(sizeof(RECV_BUF));
     int end_consumer = 0;
-    int pid = getpid();
 
     while(1)
     {
@@ -553,6 +551,11 @@ int main(int argc, char** argv)
                 perror("shmdt");
                 abort();
             }
+            if(shmdt(p_stack) != 0)
+            {
+                perror("shmdt");
+                abort();
+            }
             if(shmdt(IDAT_data) != 0)
             {
                 perror("shmdt");
@@ -564,6 +567,16 @@ int main(int argc, char** argv)
                 abort();
             }
             if(shmdt(RECV_BUF_buf) != 0)
+            {
+                perror("shmdt");
+                abort();
+            }
+            if(shmdt(consumer_numbers) != 0)
+            {
+                perror("shmdt");
+                abort();
+            }
+            if(shmdt(mutex_stack) != 0)
             {
                 perror("shmdt");
                 abort();
@@ -580,7 +593,7 @@ int main(int argc, char** argv)
 
     if(pid > 0) /* parent process left */
     {
-        
+
         for(int i = 0; i < total_child_processes; i++ )
         {
             waitpid(child_pids[i], NULL, 0);
@@ -602,7 +615,7 @@ int main(int argc, char** argv)
             abort();
         }
 
-        if(sem_destroy(&sems[0]) || sem_destroy(&sems[1]))
+        if(sem_destroy(&sems[0]) || sem_destroy(&sems[1]) || sem_destroy(&sems[2]) || sem_destroy(&sems[3]) || sem_destroy(&sems[4]) || sem_destroy(&sems[5]))
         {
             perror("sem_destroy");
             abort();
@@ -638,6 +651,11 @@ int main(int argc, char** argv)
             perror("shmdt");
             abort();
         }
+        if(shmdt(consumer_numbers) != 0)
+        {
+            perror("shmdt");
+            abort();
+        }
 
         if(shmctl(shmid_queue, IPC_RMID, NULL) == -1)
         {
@@ -665,6 +683,11 @@ int main(int argc, char** argv)
             abort();
         }
         if(shmctl(shmid_RECV_buf, IPC_RMID, NULL) == -1)
+        {
+            perror("shmctl");
+            abort();
+        }
+        if(shmctl(consumer_numbers_shmid, IPC_RMID, NULL) == -1)
         {
             perror("shmctl");
             abort();
