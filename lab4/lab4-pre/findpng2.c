@@ -1,80 +1,4 @@
-/*
- * The code is derived from cURL example and paster.c base code.
- * The cURL example is at URL:
- * https://curl.haxx.se/libcurl/c/getinmemory.html
- * Copyright (C) 1998 - 2018, Daniel Stenberg, <daniel@haxx.se>, et al..
- *
- * The xml example code is
- * http://www.xmlsoft.org/tutorial/ape.html
- *
- * The paster.c code is
- * Copyright 2013 Patrick Lam, <p23lam@uwaterloo.ca>.
- *
- * Modifications to the code are
- * Copyright 2018-2019, Yiqing Huang, <yqhuang@uwaterloo.ca>.
- *
- * This software may be freely redistributed under the terms of the X11 license.
- */
-
-/**
- * @file main_wirte_read_cb.c
- * @brief cURL write call back to save received data in a user defined memory first
- *        and then write the data to a file for verification purpose.
- *        cURL header call back extracts data sequence number from header if there is a sequence number.
- * @see https://curl.haxx.se/libcurl/c/getinmemory.html
- * @see https://curl.haxx.se/libcurl/using/
- * @see https://ec.haxx.se/callback-write.html
- */
-
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <curl/curl.h>
-#include <libxml/HTMLparser.h>
-#include <libxml/parser.h>
-#include <libxml/xpath.h>
-#include <libxml/uri.h>
-
-
-#define SEED_URL "http://ece252-1.uwaterloo.ca/lab4/"
-#define ECE252_HEADER "X-Ece252-Fragment: "
-#define BUF_SIZE 1048576  /* 1024*1024 = 1M */
-#define BUF_INC  524288   /* 1024*512  = 0.5M */
-
-#define CT_PNG  "image/png"
-#define CT_HTML "text/html"
-#define CT_PNG_LEN  9
-#define CT_HTML_LEN 9
-
-#define max(a, b) \
-   ({ __typeof__ (a) _a = (a); \
-       __typeof__ (b) _b = (b); \
-     _a > _b ? _a : _b; })
-
-typedef struct recv_buf2 {
-    char *buf;       /* memory to hold a copy of received data */
-    size_t size;     /* size of valid data in buf in bytes*/
-    size_t max_size; /* max capacity of buf in bytes*/
-    int seq;         /* >=0 sequence number extracted from http header */
-                     /* <0 indicates an invalid seq number */
-} RECV_BUF;
-
-
-htmlDocPtr mem_getdoc(char *buf, int size, const char *url);
-xmlXPathObjectPtr getnodeset (xmlDocPtr doc, xmlChar *xpath);
-int find_http(char *fname, int size, int follow_relative_links, const char *base_url);
-size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata);
-size_t write_cb_curl3(char *p_recv, size_t size, size_t nmemb, void *p_userdata);
-int recv_buf_init(RECV_BUF *ptr, size_t max_size);
-int recv_buf_cleanup(RECV_BUF *ptr);
-void cleanup(CURL *curl, RECV_BUF *ptr);
-int write_file(const char *path, const void *in, size_t len);
-CURL *easy_handle_init(RECV_BUF *ptr, const char *url);
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf);
-
+#include "findpng2.h"
 
 htmlDocPtr mem_getdoc(char *buf, int size, const char *url)
 {
@@ -83,7 +7,7 @@ htmlDocPtr mem_getdoc(char *buf, int size, const char *url)
     htmlDocPtr doc = htmlReadMemory(buf, size, url, NULL, opts);
 
     if ( doc == NULL ) {
-        fprintf(stderr, "Document not parsed successfully.\n");
+        // fprintf(stderr, "Document not parsed successfully.\n");
         return NULL;
     }
     return doc;
@@ -108,15 +32,14 @@ xmlXPathObjectPtr getnodeset (xmlDocPtr doc, xmlChar *xpath)
     }
     if(xmlXPathNodeSetIsEmpty(result->nodesetval)){
         xmlXPathFreeObject(result);
-        printf("No result\n");
+        // printf("No result\n");
         return NULL;
     }
     return result;
 }
 
-int find_http(char *buf, int size, int follow_relative_links, const char *base_url)
+int find_http(char *buf, int size, int follow_relative_links, const char *base_url, struct Queue* q)
 {
-
     int i;
     htmlDocPtr doc;
     xmlChar *xpath = (xmlChar*) "//a/@href";
@@ -140,7 +63,8 @@ int find_http(char *buf, int size, int follow_relative_links, const char *base_u
                 xmlFree(old);
             }
             if ( href != NULL && !strncmp((const char *)href, "http", 4) ) {
-                printf("href: %s\n", href);
+                enQueue(q, (char*)href, strlen((char*)href));
+                // printf("href: %s\n", href);
             }
             xmlFree(href);
         }
@@ -169,7 +93,7 @@ size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata)
     int realsize = size * nmemb;
     RECV_BUF *p = userdata;
 
-    printf("%s", p_recv);
+    // printf("%s", p_recv);
     if (realsize > strlen(ECE252_HEADER) &&
 	strncmp(p_recv, ECE252_HEADER, strlen(ECE252_HEADER)) == 0) {
 
@@ -250,9 +174,9 @@ int recv_buf_cleanup(RECV_BUF *ptr)
 
 void cleanup(CURL *curl, RECV_BUF *ptr)
 {
-        curl_easy_cleanup(curl);
-        curl_global_cleanup();
-        recv_buf_cleanup(ptr);
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
+    recv_buf_cleanup(ptr);
 }
 /**
  * @brief output data in memory to a file
@@ -275,7 +199,7 @@ int write_file(const char *path, const void *in, size_t len)
         return -1;
     }
 
-    fp = fopen(path, "wb");
+    fp = fopen(path, "ab");
     if (fp == NULL) {
         perror("fopen");
         return -2;
@@ -285,6 +209,12 @@ int write_file(const char *path, const void *in, size_t len)
         fprintf(stderr, "write_file: imcomplete write!\n");
         return -3;
     }
+
+    if (fwrite("\n", sizeof(char), 1, fp) != 1) {
+        fprintf(stderr, "write_file: imcomplete write!\n");
+        return -3;
+    }
+
     return fclose(fp);
 }
 
@@ -358,7 +288,7 @@ CURL *easy_handle_init(RECV_BUF *ptr, const char *url)
     return curl_handle;
 }
 
-int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf)
+int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, struct Queue* q)
 {
     char fname[256];
     int follow_relative_link = 1;
@@ -366,23 +296,23 @@ int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf)
     pid_t pid =getpid();
 
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &url);
-    find_http(p_recv_buf->buf, p_recv_buf->size, follow_relative_link, url);
+    find_http(p_recv_buf->buf, p_recv_buf->size, follow_relative_link, url, q);
     sprintf(fname, "./output_%d.html", pid);
-    return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
+    return 0;
 }
 
-int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf)
+int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, int* pngs_found)
 {
-    pid_t pid =getpid();
-    char fname[256];
     char *eurl = NULL;          /* effective URL */
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &eurl);
     if ( eurl != NULL) {
+        (*pngs_found)++;
         printf("The PNG url is: %s\n", eurl);
+        char* file_name = "png_urls.txt";
+        write_file(file_name, eurl, strlen(eurl));
     }
 
-    sprintf(fname, "./output_%d_%d.png", p_recv_buf->seq, pid);
-    return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
+    return 0;
 }
 /**
  * @brief process teh download data by curl
@@ -391,7 +321,7 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf)
  * @return 0 on success; non-zero otherwise
  */
 
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf)
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, struct Queue* q, int* pngs_found)
 {
     CURLcode res;
     char fname[256];
@@ -400,72 +330,184 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf)
 
     res = curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &response_code);
     if ( res == CURLE_OK ) {
-	    printf("Response code: %ld\n", response_code);
+	    // printf("Response code: %ld\n", response_code);
     }
 
     if ( response_code >= 400 ) {
-    	fprintf(stderr, "Error.\n");
+    	// fprintf(stderr, "Error.\n");
         return 1;
     }
 
     char *ct = NULL;
     res = curl_easy_getinfo(curl_handle, CURLINFO_CONTENT_TYPE, &ct);
     if ( res == CURLE_OK && ct != NULL ) {
-    	printf("Content-Type: %s, len=%ld\n", ct, strlen(ct));
+    	// printf("Content-Type: %s, len=%ld\n", ct, strlen(ct));
     } else {
-        fprintf(stderr, "Failed obtain Content-Type\n");
+        // fprintf(stderr, "Failed obtain Content-Type\n");
         return 2;
     }
 
     if ( strstr(ct, CT_HTML) ) {
-        return process_html(curl_handle, p_recv_buf);
+        return process_html(curl_handle, p_recv_buf, q);
     } else if ( strstr(ct, CT_PNG) ) {
-        return process_png(curl_handle, p_recv_buf);
+        return process_png(curl_handle, p_recv_buf, pngs_found);
     } else {
         sprintf(fname, "./output_%d", pid);
     }
 
-    return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
+    return 0;
+}
+
+int command_line_options(int *argthreads, int *argimages, char *argurl, int argc, char ** argv)
+{
+    int option;
+    char *str = "option requires an argument";
+    int url_index = 1;
+
+    while ((option = getopt(argc, argv, "t:m:")) != -1)
+    {
+        switch (option)
+        {
+            case 't':
+                *argthreads = strtoul(optarg, NULL, 10);
+                if (*argthreads <= 0)
+                {
+                    fprintf(stderr, "%s: %s > 0 -- 't'\n", argv[0], str);
+                    return -1;
+                }
+                url_index = 3;
+                break;
+            case 'm':
+                *argimages = strtoul(optarg, NULL, 10);
+                if (*argimages < 0)
+                {
+                    fprintf(stderr, "%s: %s > 0 -- 'n'\n", argv[0], str);
+                    return -1;
+                }
+                else if(*argimages > 50)
+                {
+                    *argimages = 50;
+                }
+                url_index = 5;
+                break;
+            default:
+                return -1;
+        }
+    }
+
+    if(argc == 1)
+    {
+        strcpy(argurl, SEED_URL);
+    }
+    else
+    {
+        strcpy(argurl, argv[url_index]);
+    }
+
+    return 0;
 }
 
 int main( int argc, char** argv )
 {
+    int num_threads = 1; /* number of threads being used; for single threaded deafult to 1 */
+    int num_images = 60;  /* number of images used */
+    char url[256];       /* SEED URL used */
+
+    /* Check if command line arguments entered are correct */
+    if(command_line_options(&num_threads, &num_images, url, argc, argv) != 0)
+    {
+        return -1;
+    }
+
+    /* create an empty png_urls.txt file */
+    FILE *fp = NULL;
+
+    fp = fopen("png_urls.txt", "w");
+    if (fp == NULL) {
+        perror("fopen");
+        return -2;
+    }
+
+    fclose(fp);
+
+
+    /* create a hash table of 1000 possible urls */
+    hcreate(1000);
+
+    /* create a Queue to store the URLs that need to be visited */
+    struct Queue* q = createQueue();
+    enQueue(q, url, strlen(url));
+
+    int png_urls_found = 0;
+
     CURL *curl_handle;
     CURLcode res;
-    char url[256];
     RECV_BUF recv_buf;
 
-    if (argc == 1) {
-        strcpy(url, SEED_URL);
-    } else {
-        strcpy(url, argv[1]);
-    }
-    printf("%s: URL is %s\n", argv[0], url);
-
     curl_global_init(CURL_GLOBAL_DEFAULT);
-    curl_handle = easy_handle_init(&recv_buf, url);
 
-    if ( curl_handle == NULL ) {
-        fprintf(stderr, "Curl initialization failed. Exiting...\n");
-        curl_global_cleanup();
-        abort();
+    while((png_urls_found < num_images) && (q->front != NULL))
+    {
+        // printf("\n");
+        /* Get the most recent url */
+        char* url4 = deQueue(q);
+        // printf("Dequeued url is = %s \n", url4);
+
+        ENTRY item;
+        ENTRY *found_item;
+        item.key = url4;
+        item.data = 0;
+
+        found_item = hsearch(item, FIND);
+
+        /* Make sure the queue is not empty */
+        if(url4 != NULL && found_item == NULL)
+        {
+            /* Update the url to be used */
+            curl_handle = easy_handle_init(&recv_buf, url4);
+            if ( curl_handle == NULL ) {
+                fprintf(stderr, "Curl initialization failed. Exiting...\n");
+                curl_global_cleanup();
+                abort();
+            }
+
+            /* get it! */
+            res = curl_easy_perform(curl_handle);
+
+            if( res != CURLE_OK) {
+                // fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+                // cleanup(curl_handle, &recv_buf);
+                // exit(1);
+            } else {
+            // printf("%lu bytes received in memory %p, seq=%d.\n", \
+            //         recv_buf.size, recv_buf.buf, recv_buf.seq);
+            }
+
+            /* process the download data */
+            process_data(curl_handle, &recv_buf, q, &png_urls_found);
+
+            ENTRY temp_url;
+            temp_url.key = malloc(strlen(url4) * sizeof(char) + 1);
+            strncpy(temp_url.key, url4, strlen(url4));
+            temp_url.key[strlen(url4)] = '\0';
+            temp_url.data = 0;
+
+            hsearch(temp_url, ENTER);
+
+            free(url4);
+        }
+        else if(url4 != NULL)
+        {
+            // printf("URL is in the hash %s \n", url4);
+            free(url4);
+        }
     }
-    /* get it! */
-    res = curl_easy_perform(curl_handle);
-
-    if( res != CURLE_OK) {
-        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-        cleanup(curl_handle, &recv_buf);
-        exit(1);
-    } else {
-	printf("%lu bytes received in memory %p, seq=%d.\n", \
-               recv_buf.size, recv_buf.buf, recv_buf.seq);
-    }
-
-    /* process the download data */
-    process_data(curl_handle, &recv_buf);
 
     /* cleaning up */
     cleanup(curl_handle, &recv_buf);
+
+    free(q);
+    hdestroy();
+
     return 0;
 }
