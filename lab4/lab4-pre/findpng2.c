@@ -200,12 +200,21 @@ int recv_buf_cleanup(RECV_BUF *ptr)
     return 0;
 }
 
-void cleanup(CURL *curl, RECV_BUF *ptr)
+void create_file(const char* path)
 {
-    curl_easy_cleanup(curl);
-    curl_global_cleanup();
-    recv_buf_cleanup(ptr);
+    FILE *fp = NULL;
+
+    fp = fopen(path, "w");
+    if (fp == NULL) {
+        perror("fopen");
+        return;
+    }
+
+    fclose(fp);
+
+    return;
 }
+
 /**
  * @brief output data in memory to a file
  * @param path const char *, output file path
@@ -388,7 +397,7 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, struct Queue* q, int* 
     return 0;
 }
 
-int command_line_options(int *argthreads, int *argimages, char *argurl, int argc, char ** argv)
+int command_line_options(struct thread_args* params, char *argurl, int argc, char ** argv)
 {
     int option;
     char *str = "option requires an argument";
@@ -399,8 +408,8 @@ int command_line_options(int *argthreads, int *argimages, char *argurl, int argc
         switch (option)
         {
             case 't':
-                *argthreads = strtoul(optarg, NULL, 10);
-                if (*argthreads <= 0)
+                params->num_threads = strtoul(optarg, NULL, 10);
+                if (params->num_threads <= 0)
                 {
                     fprintf(stderr, "%s: %s > 0 -- 't'\n", argv[0], str);
                     return -1;
@@ -408,15 +417,15 @@ int command_line_options(int *argthreads, int *argimages, char *argurl, int argc
                 url_index = 3;
                 break;
             case 'm':
-                *argimages = strtoul(optarg, NULL, 10);
-                if (*argimages < 0)
+                params->num_images = strtoul(optarg, NULL, 10);
+                if (params->num_images < 0)
                 {
                     fprintf(stderr, "%s: %s > 0 -- 'n'\n", argv[0], str);
                     return -1;
                 }
-                else if(*argimages > 50)
+                else if(params->num_images > 50)
                 {
-                    *argimages = 50;
+                    params->num_images = 50;
                 }
                 url_index = 5;
                 break;
@@ -437,58 +446,25 @@ int command_line_options(int *argthreads, int *argimages, char *argurl, int argc
     return 0;
 }
 
-int main( int argc, char** argv )
+void initThreadArgs(struct thread_args* params)
 {
-    double times[2];
-    struct timeval tv;
-    if (gettimeofday(&tv, NULL) != 0) {
-        perror("gettimeofday");
-        abort();
-    }
-    times[0] = (tv.tv_sec) + tv.tv_usec/1000000.;
+    params->num_images = 50;      /* number of images used */
+    params->num_threads = 1;      /* number of threads being used; for single threaded deafult to 1 */
+    params->png_urls_found = 0;   /* number of png urls found */
+    params->q = createQueue();
+}
 
-    int num_threads = 1; /* number of threads being used; for single threaded deafult to 1 */
-    int num_images = 10;  /* number of images used */
-    char url[256];       /* SEED URL used */
-
-    /* Check if command line arguments entered are correct */
-    if(command_line_options(&num_threads, &num_images, url, argc, argv) != 0)
-    {
-        return -1;
-    }
-
-    /* create an empty png_urls.txt file */
-    FILE *fp = NULL;
-
-    fp = fopen("png_urls.txt", "w");
-    if (fp == NULL) {
-        perror("fopen");
-        return -2;
-    }
-
-    fclose(fp);
-
-    /* create a hash table of 1000 possible urls */
-    hcreate(1000);
-
-    /* create a Queue to store the URLs that need to be visited */
-    struct Queue* q = createQueue();
-    enQueue(q, url, strlen(url));
-
-    int png_urls_found = 0;
+void *retreive_urls(void *arg)
+{
+    struct thread_args *arguments = arg;
 
     CURL *curl_handle;
-    CURLcode res;
     RECV_BUF recv_buf;
 
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-
-    while((png_urls_found < num_images) && (q->front != NULL))
+    while((arguments->png_urls_found < arguments->num_images) && (arguments->q->front != NULL))
     {
-        // printf("\n");
         /* Get the most recent url */
-        char* url4 = deQueue(q);
-        // printf("Dequeued url is = %s \n", url4);
+        char* url4 = deQueue(arguments->q);
 
         ENTRY item;
         ENTRY *found_item;
@@ -509,19 +485,10 @@ int main( int argc, char** argv )
             }
 
             /* get it! */
-            res = curl_easy_perform(curl_handle);
-
-            if( res != CURLE_OK) {
-                // fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-                // cleanup(curl_handle, &recv_buf);
-                // exit(1);
-            } else {
-            // printf("%lu bytes received in memory %p, seq=%d.\n", \
-            //         recv_buf.size, recv_buf.buf, recv_buf.seq);
-            }
+            curl_easy_perform(curl_handle);
 
             /* process the download data */
-            process_data(curl_handle, &recv_buf, q, &png_urls_found);
+            process_data(curl_handle, &recv_buf, arguments->q, &arguments->png_urls_found);
 
             ENTRY temp_url;
             temp_url.key = malloc(strlen(url4) * sizeof(char) + 1);
@@ -532,18 +499,67 @@ int main( int argc, char** argv )
             hsearch(temp_url, ENTER);
 
             free(url4);
+
+            curl_easy_cleanup(curl_handle);
+            recv_buf_cleanup(&recv_buf);
         }
         else if(url4 != NULL)
         {
-            // printf("URL is in the hash %s \n", url4);
             free(url4);
         }
     }
 
-    /* cleaning up */
-    cleanup(curl_handle, &recv_buf);
+    return NULL;
+}
 
-    free(q);
+int main( int argc, char** argv )
+{
+    double times[2];
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) != 0) {
+        perror("gettimeofday");
+        abort();
+    }
+    times[0] = (tv.tv_sec) + tv.tv_usec/1000000.;
+
+    char url[256];
+    struct thread_args in_params;
+    initThreadArgs(&in_params);
+
+    /* Check if command line arguments entered are correct */
+    if(command_line_options(&in_params, url, argc, argv) != 0)
+    {
+        return -1;
+    }
+
+    /* Enqueue the original url */
+    enQueue(in_params.q, url, strlen(url));
+
+    /* create an empty png_urls.txt file */
+    create_file("png_urls.txt");
+
+    /* create a hash table of 1000 possible urls */
+    hcreate(1000);
+
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
+    pthread_t *p_tids = malloc(sizeof(pthread_t) * in_params.num_threads);
+
+    for (int i = 0; i < in_params.num_threads; i++)
+    {
+        pthread_create(p_tids + i, NULL, retreive_urls, &in_params);
+    }
+
+    for (int i = 0; i < in_params.num_threads; i++)
+    {
+        pthread_join(p_tids[i], NULL);
+    }
+
+    /* cleaning up */
+    curl_global_cleanup();
+
+    free(p_tids);
+    free(in_params.q);
     hdestroy();
 
     if (gettimeofday(&tv, NULL) != 0)

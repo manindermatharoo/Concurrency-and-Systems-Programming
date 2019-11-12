@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <curl/curl.h>
+#include <pthread.h>
 #include "search.h"
 #include <libxml/HTMLparser.h>
 #include <libxml/parser.h>
@@ -29,6 +30,14 @@
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
 
+struct thread_args
+{
+    int num_threads;
+    int num_images;
+    int png_urls_found;
+    struct Queue* q;
+};
+
 typedef struct recv_buf2 {
     char *buf;       /* memory to hold a copy of received data */
     size_t size;     /* size of valid data in buf in bytes*/
@@ -45,11 +54,14 @@ size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata);
 size_t write_cb_curl3(char *p_recv, size_t size, size_t nmemb, void *p_userdata);
 int recv_buf_init(RECV_BUF *ptr, size_t max_size);
 int recv_buf_cleanup(RECV_BUF *ptr);
-void cleanup(CURL *curl, RECV_BUF *ptr);
+void create_file(const char* path);
 int write_file(const char *path, const void *in, size_t len);
 CURL *easy_handle_init(RECV_BUF *ptr, const char *url);
 int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, struct Queue* q);
 int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, int* pngs_found);
 int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, struct Queue* q, int* pngs_found);
 
-int command_line_options(int *argthreads, int *argimages, char *argurl, int argc, char ** argv);
+void initThreadArgs(struct thread_args* params);
+int command_line_options(struct thread_args* params, char *argurl, int argc, char ** argv);
+
+void *retreive_urls(void *arg);
