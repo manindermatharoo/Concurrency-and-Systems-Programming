@@ -1,5 +1,33 @@
 #include "findpng2.h"
 
+int isPNG(RECV_BUF *p_recv_buf)
+{
+    int file_is_png = 0;
+
+    /* Create array that matches header of a png file */
+    char png_byte_header[8];
+    png_byte_header[0] = 137; //89
+    png_byte_header[1] = 80;  //50
+    png_byte_header[2] = 78;  //4E
+    png_byte_header[3] = 71;  //47
+    png_byte_header[4] = 13;  //0D
+    png_byte_header[5] = 10;  //0A
+    png_byte_header[6] = 26;  //1A
+    png_byte_header[7] = 10;  //0A
+
+    /* Make sure the header of the file matches a png header */
+    for(int i = 0; i < 8; i++)
+    {
+        if(p_recv_buf->buf[i] != png_byte_header[i])
+        {
+            file_is_png = 1;
+            break;
+        }
+    }
+
+    return file_is_png;
+}
+
 htmlDocPtr mem_getdoc(char *buf, int size, const char *url)
 {
     int opts = HTML_PARSE_NOBLANKS | HTML_PARSE_NOERROR | \
@@ -306,10 +334,12 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, int* pngs_found)
     char *eurl = NULL;          /* effective URL */
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &eurl);
     if ( eurl != NULL) {
-        (*pngs_found)++;
-        printf("The PNG url is: %s\n", eurl);
-        char* file_name = "png_urls.txt";
-        write_file(file_name, eurl, strlen(eurl));
+        if(isPNG(p_recv_buf) == 0)
+        {
+            (*pngs_found)++;
+            char* file_name = "png_urls.txt";
+            write_file(file_name, eurl, strlen(eurl));
+        }
     }
 
     return 0;
@@ -409,8 +439,16 @@ int command_line_options(int *argthreads, int *argimages, char *argurl, int argc
 
 int main( int argc, char** argv )
 {
+    double times[2];
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) != 0) {
+        perror("gettimeofday");
+        abort();
+    }
+    times[0] = (tv.tv_sec) + tv.tv_usec/1000000.;
+
     int num_threads = 1; /* number of threads being used; for single threaded deafult to 1 */
-    int num_images = 60;  /* number of images used */
+    int num_images = 10;  /* number of images used */
     char url[256];       /* SEED URL used */
 
     /* Check if command line arguments entered are correct */
@@ -429,7 +467,6 @@ int main( int argc, char** argv )
     }
 
     fclose(fp);
-
 
     /* create a hash table of 1000 possible urls */
     hcreate(1000);
@@ -508,6 +545,14 @@ int main( int argc, char** argv )
 
     free(q);
     hdestroy();
+
+    if (gettimeofday(&tv, NULL) != 0)
+    {
+        perror("gettimeofday");
+        abort();
+    }
+    times[1] = (tv.tv_sec) + tv.tv_usec/1000000.;
+    printf("findpng2 execution time: %.6lf seconds\n", times[1] - times[0]);
 
     return 0;
 }
