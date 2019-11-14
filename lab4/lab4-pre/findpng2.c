@@ -403,55 +403,65 @@ int command_line_options(struct thread_args* params, char *argurl, int argc, cha
     char *str = "option requires an argument";
     int url_index = 1;
 
+    int t_found = 0;
+    int m_found = 0;
+
+    if(argc < 2)
+    {
+        printf("Need a SEED URL. \n");
+        return -1;
+    }
+
     while ((option = getopt(argc, argv, "t:m:")) != -1)
     {
         switch (option)
         {
             case 't':
+                t_found = 1;
                 params->num_threads = strtoul(optarg, NULL, 10);
                 if (params->num_threads <= 0)
                 {
                     fprintf(stderr, "%s: %s > 0 -- 't'\n", argv[0], str);
                     return -1;
                 }
-                url_index = 3;
                 break;
             case 'm':
+                m_found = 1;
                 params->num_images = strtoul(optarg, NULL, 10);
                 if (params->num_images < 0)
                 {
                     fprintf(stderr, "%s: %s > 0 -- 'n'\n", argv[0], str);
                     return -1;
                 }
-                else if(params->num_images > 50)
-                {
-                    params->num_images = 50;
-                }
-                url_index = 5;
                 break;
             default:
                 return -1;
         }
     }
 
-    if(argc == 1)
+    if((t_found == 1) && (m_found == 1))
     {
-        strcpy(argurl, SEED_URL);
+        url_index = 5;
     }
-    else
+    else if((t_found == 1) || (m_found == 1))
     {
-        strcpy(argurl, argv[url_index]);
+        url_index = 3;
     }
+
+    strcpy(argurl, argv[url_index]);
 
     return 0;
 }
 
 void initThreadArgs(struct thread_args* params)
 {
-    params->num_images = 50;      /* number of images used */
-    params->num_threads = 1;      /* number of threads being used; for single threaded deafult to 1 */
-    params->png_urls_found = 0;   /* number of png urls found */
-    params->q = createQueue();
+    params->num_images = 50;                                        /* number of images used */
+    params->num_threads = 1;                                        /* number of threads being used; for single threaded deafult to 1 */
+    params->png_urls_found = 0;                                     /* number of png urls found */
+    params->q = createQueue();                                      /* create the queue */
+    params->all_urls = (char**)malloc(MAX_URLS * sizeof(char*));    /* store the urls found */
+    memset(params->all_urls, 0, MAX_URLS * sizeof(char*));
+    params->all_urls_index = 0;                                     /* index of all urls */
 }
 
 void *retreive_urls(void *arg)
@@ -490,11 +500,15 @@ void *retreive_urls(void *arg)
             /* process the download data */
             process_data(curl_handle, &recv_buf, arguments->q, &arguments->png_urls_found);
 
+            char* temp_url4 = malloc(strlen(url4) * sizeof(char) + 1);
+            strncpy(temp_url4, url4, strlen(url4));
+            temp_url4[strlen(url4)] = '\0';
+
             ENTRY temp_url;
-            temp_url.key = malloc(strlen(url4) * sizeof(char) + 1);
-            strncpy(temp_url.key, url4, strlen(url4));
-            temp_url.key[strlen(url4)] = '\0';
+            temp_url.key = temp_url4;
             temp_url.data = 0;
+
+            arguments->all_urls[arguments->all_urls_index++] = temp_url4;
 
             hsearch(temp_url, ENTER);
 
@@ -539,11 +553,11 @@ int main( int argc, char** argv )
     create_file("png_urls.txt");
 
     /* create a hash table of 1000 possible urls */
-    hcreate(1000);
-
-    curl_global_init(CURL_GLOBAL_DEFAULT);
+    hcreate(MAX_URLS);
 
     pthread_t *p_tids = malloc(sizeof(pthread_t) * in_params.num_threads);
+
+    curl_global_init(CURL_GLOBAL_DEFAULT);
 
     for (int i = 0; i < in_params.num_threads; i++)
     {
@@ -561,6 +575,13 @@ int main( int argc, char** argv )
     free(p_tids);
     free(in_params.q);
     hdestroy();
+
+    for(int i = 0; i < MAX_URLS; i ++)
+    {
+        free(in_params.all_urls[i]);
+    }
+
+    free(in_params.all_urls);
 
     if (gettimeofday(&tv, NULL) != 0)
     {

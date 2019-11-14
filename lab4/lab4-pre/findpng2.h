@@ -15,10 +15,10 @@
 #include <libxml/uri.h>
 #include "queue.h"
 
-#define SEED_URL "http://ece252-1.uwaterloo.ca/lab4/"
 #define ECE252_HEADER "X-Ece252-Fragment: "
 #define BUF_SIZE 1048576  /* 1024*1024 = 1M */
 #define BUF_INC  524288   /* 1024*512  = 0.5M */
+#define MAX_URLS 1000
 
 #define CT_PNG  "image/png"
 #define CT_HTML "text/html"
@@ -36,6 +36,8 @@ struct thread_args
     int num_images;
     int png_urls_found;
     struct Queue* q;
+    char** all_urls;
+    int all_urls_index;
 };
 
 typedef struct recv_buf2 {
