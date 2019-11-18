@@ -66,7 +66,7 @@ xmlXPathObjectPtr getnodeset (xmlDocPtr doc, xmlChar *xpath)
     return result;
 }
 
-int find_http(char *buf, int size, int follow_relative_links, const char *base_url, struct Queue* q)
+int find_http(char *buf, int size, int follow_relative_links, const char *base_url, struct thread_args *args)
 {
     int i;
     htmlDocPtr doc;
@@ -88,18 +88,32 @@ int find_http(char *buf, int size, int follow_relative_links, const char *base_u
             if ( follow_relative_links ) {
                 xmlChar *old = href;
                 href = xmlBuildURI(href, (xmlChar *) base_url);
-                xmlFree(old);
+                if(old)
+                {
+                    xmlFree(old);
+                }
             }
             if ( href != NULL && !strncmp((const char *)href, "http", 4) ) {
-                enQueue(q, (char*)href, strlen((char*)href));
+                pthread_mutex_lock(&args->queue);
+                enQueue(args->q, (char*)href, strlen((char*)href));
+                pthread_mutex_unlock(&args->queue);
+                sem_post(&args->queue_sem);
                 // printf("href: %s\n", href);
             }
-            xmlFree(href);
+            if(href)
+            {
+                xmlFree(href);
+            }
         }
-        xmlXPathFreeObject (result);
+        if(result)
+        {
+            xmlXPathFreeObject (result);
+        }
     }
-    xmlFreeDoc(doc);
-    xmlCleanupParser();
+    if(doc)
+    {
+        xmlFreeDoc(doc);
+    }
     return 0;
 }
 /**
@@ -325,7 +339,7 @@ CURL *easy_handle_init(RECV_BUF *ptr, const char *url)
     return curl_handle;
 }
 
-int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, struct Queue* q)
+int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *args)
 {
     char fname[256];
     int follow_relative_link = 1;
@@ -333,21 +347,31 @@ int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, struct Queue* q)
     pid_t pid =getpid();
 
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &url);
-    find_http(p_recv_buf->buf, p_recv_buf->size, follow_relative_link, url, q);
-    sprintf(fname, "./output_%d.html", pid);
+    if(not_all_urls_found(args) == 1)
+    {
+        find_http(p_recv_buf->buf, p_recv_buf->size, follow_relative_link, url, args);
+        sprintf(fname, "./output_%d.html", pid);
+    }
     return 0;
 }
 
-int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, int* pngs_found)
+int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *args)
 {
     char *eurl = NULL;          /* effective URL */
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &eurl);
     if ( eurl != NULL) {
         if(isPNG(p_recv_buf) == 0)
         {
-            (*pngs_found)++;
-            char* file_name = "png_urls.txt";
-            write_file(file_name, eurl, strlen(eurl));
+            if(not_all_urls_found(args) == 1)
+            {
+                pthread_mutex_lock(&args->png_urls_found_currently);
+                args->png_urls_found++;
+                pthread_mutex_unlock(&args->png_urls_found_currently);
+
+                pthread_mutex_lock(&args->png_file_lock);
+                write_file("png_urls.txt", eurl, strlen(eurl));
+                pthread_mutex_unlock(&args->png_file_lock);
+            }
         }
     }
 
@@ -360,7 +384,7 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, int* pngs_found)
  * @return 0 on success; non-zero otherwise
  */
 
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, struct Queue* q, int* pngs_found)
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *args)
 {
     CURLcode res;
     char fname[256];
@@ -386,12 +410,15 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, struct Queue* q, int* 
         return 2;
     }
 
-    if ( strstr(ct, CT_HTML) ) {
-        return process_html(curl_handle, p_recv_buf, q);
-    } else if ( strstr(ct, CT_PNG) ) {
-        return process_png(curl_handle, p_recv_buf, pngs_found);
-    } else {
-        sprintf(fname, "./output_%d", pid);
+    if(not_all_urls_found(args) == 1)
+    {
+        if ( strstr(ct, CT_HTML) ) {
+            return process_html(curl_handle, p_recv_buf, args);
+        } else if ( strstr(ct, CT_PNG) ) {
+            return process_png(curl_handle, p_recv_buf, args);
+        } else {
+            sprintf(fname, "./output_%d", pid);
+        }
     }
 
     return 0;
@@ -405,6 +432,7 @@ int command_line_options(struct thread_args* params, char *argurl, int argc, cha
 
     int t_found = 0;
     int m_found = 0;
+    int v_found = 0;
 
     if(argc < 2)
     {
@@ -412,7 +440,7 @@ int command_line_options(struct thread_args* params, char *argurl, int argc, cha
         return -1;
     }
 
-    while ((option = getopt(argc, argv, "t:m:")) != -1)
+    while ((option = getopt(argc, argv, "t:m:v:")) != -1)
     {
         switch (option)
         {
@@ -434,16 +462,26 @@ int command_line_options(struct thread_args* params, char *argurl, int argc, cha
                     return -1;
                 }
                 break;
+            case 'v':
+                v_found = 1;
+                params->log_file = (char*)malloc(strlen(optarg) + 1);
+                strncpy(params->log_file, optarg, strlen(optarg));
+                params->log_file[strlen(optarg)] = '\0';
+                break;
             default:
                 return -1;
         }
     }
 
-    if((t_found == 1) && (m_found == 1))
+    if((t_found == 1) && (m_found == 1) && (v_found == 1))
+    {
+        url_index = 7;
+    }
+    else if((t_found == 1) && (m_found == 1))
     {
         url_index = 5;
     }
-    else if((t_found == 1) || (m_found == 1))
+    else if((t_found == 1) || (m_found == 1) || (v_found == 1))
     {
         url_index = 3;
     }
@@ -462,66 +500,160 @@ void initThreadArgs(struct thread_args* params)
     params->all_urls = (char**)malloc(MAX_URLS * sizeof(char*));    /* store the urls found */
     memset(params->all_urls, 0, MAX_URLS * sizeof(char*));
     params->all_urls_index = 0;                                     /* index of all urls */
+    params->log_file = NULL;
+
+    /* initialize all the mutexes */
+    pthread_mutex_init(&params->queue, NULL);
+    pthread_mutex_init(&params->all_urls_array, NULL);
+    pthread_mutex_init(&params->log_file_lock, NULL);
+    pthread_mutex_init(&params->png_file_lock, NULL);
+    pthread_mutex_init(&params->png_urls_found_currently, NULL);
+    pthread_mutex_init(&params->hash, NULL);
+    pthread_mutex_init(&params->threads_mutex, NULL);
+
+    // pthread_cond_init(&params->cond);
+
+    sem_init(&params->queue_sem, 0, 0);
+    sem_init(&params->done, 0, 0);
+
+    params->threads_waiting = 0;
+}
+
+int not_all_urls_found(struct thread_args *args)
+{
+    int status1 = 0;
+
+    pthread_mutex_lock(&args->png_urls_found_currently);
+    status1 = args->png_urls_found < args->num_images;
+    pthread_mutex_unlock(&args->png_urls_found_currently);
+
+    return ((status1 == 1));
+}
+
+int number_of_threads_waiting(struct thread_args *args)
+{
+    int status2 = 0;
+
+    pthread_mutex_lock(&args->threads_mutex);
+    args->threads_waiting++;
+    status2 = args->threads_waiting == args->num_threads;
+    pthread_mutex_unlock(&args->threads_mutex);
+
+    return status2;
+}
+
+void mutex_cleanup(void* arg)
+{
+    struct thread_args *arguments = arg;
+    pthread_mutex_unlock(&arguments->threads_mutex);
 }
 
 void *retreive_urls(void *arg)
 {
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
     struct thread_args *arguments = arg;
 
     CURL *curl_handle;
     RECV_BUF recv_buf;
+    char* url4 = NULL;
 
-    while((arguments->png_urls_found < arguments->num_images) && (arguments->q->front != NULL))
+    int status = 1;
+
+    // while(1);
+
+    while((not_all_urls_found(arguments) == 1))
     {
-        /* Get the most recent url */
-        char* url4 = deQueue(arguments->q);
+        pthread_mutex_lock(&arguments->threads_mutex);
+            pthread_cleanup_push(mutex_cleanup, arguments);
+                arguments->threads_waiting++;
+                pthread_mutex_lock(&arguments->queue);
+                status = (arguments->q->front == NULL);
+                pthread_mutex_unlock(&arguments->queue);
+                if ((arguments->threads_waiting == arguments->num_threads) && (status == 1) ) {
+                    sem_post(&arguments->done);
+                }
+            pthread_cleanup_pop(0);
+        pthread_mutex_unlock(&arguments->threads_mutex);
 
-        ENTRY item;
-        ENTRY *found_item;
-        item.key = url4;
-        item.data = 0;
+		sem_wait(&arguments->queue_sem);
 
-        found_item = hsearch(item, FIND);
+		pthread_mutex_lock(&arguments->threads_mutex);
+            pthread_cleanup_push(mutex_cleanup, arguments);
+                arguments->threads_waiting--;
+                pthread_mutex_lock(&arguments->queue);
+                url4 = deQueue(arguments->q);
+                pthread_mutex_unlock(&arguments->queue);
+            pthread_cleanup_pop(0);
+		pthread_mutex_unlock(&arguments->threads_mutex);
 
-        /* Make sure the queue is not empty */
-        if(url4 != NULL && found_item == NULL)
+        if(url4 != NULL)
         {
-            /* Update the url to be used */
-            curl_handle = easy_handle_init(&recv_buf, url4);
-            if ( curl_handle == NULL ) {
-                fprintf(stderr, "Curl initialization failed. Exiting...\n");
-                curl_global_cleanup();
-                abort();
+            ENTRY item;
+            ENTRY *found_item;
+            item.key = url4;
+            item.data = 0;
+
+            pthread_mutex_lock(&arguments->hash);
+            found_item = hsearch(item, FIND);
+            pthread_mutex_unlock(&arguments->hash);
+
+            /* Make sure the queue is not empty */
+            if(url4 != NULL && found_item == NULL)
+            {
+                /* Update the url to be used */
+                curl_handle = easy_handle_init(&recv_buf, url4);
+                if ( curl_handle == NULL ) {
+                    fprintf(stderr, "Curl initialization failed. Exiting...\n");
+                    curl_global_cleanup();
+                    abort();
+                }
+
+                /* get it! */
+                curl_easy_perform(curl_handle);
+
+                /* process the download data */
+                process_data(curl_handle, &recv_buf, arguments);
+
+                char* temp_url4 = malloc(strlen(url4) * sizeof(char) + 1);
+                strncpy(temp_url4, url4, strlen(url4));
+                temp_url4[strlen(url4)] = '\0';
+
+                pthread_mutex_lock(&arguments->log_file_lock);
+                if(arguments->log_file != NULL)
+                {
+                    write_file(arguments->log_file, temp_url4, strlen(temp_url4));
+                }
+                pthread_mutex_unlock(&arguments->log_file_lock);
+
+                ENTRY temp_url;
+                temp_url.key = temp_url4;
+                temp_url.data = 0;
+
+                pthread_mutex_lock(&arguments->all_urls_array);
+                arguments->all_urls[arguments->all_urls_index++] = temp_url4;
+                pthread_mutex_unlock(&arguments->all_urls_array);
+
+                pthread_mutex_lock(&arguments->hash);
+                hsearch(temp_url, ENTER);
+                pthread_mutex_unlock(&arguments->hash);
+
+                if(url4 != NULL)
+                {
+                    free(url4);
+                }
+
+                curl_easy_cleanup(curl_handle);
+                recv_buf_cleanup(&recv_buf);
             }
-
-            /* get it! */
-            curl_easy_perform(curl_handle);
-
-            /* process the download data */
-            process_data(curl_handle, &recv_buf, arguments->q, &arguments->png_urls_found);
-
-            char* temp_url4 = malloc(strlen(url4) * sizeof(char) + 1);
-            strncpy(temp_url4, url4, strlen(url4));
-            temp_url4[strlen(url4)] = '\0';
-
-            ENTRY temp_url;
-            temp_url.key = temp_url4;
-            temp_url.data = 0;
-
-            arguments->all_urls[arguments->all_urls_index++] = temp_url4;
-
-            hsearch(temp_url, ENTER);
-
-            free(url4);
-
-            curl_easy_cleanup(curl_handle);
-            recv_buf_cleanup(&recv_buf);
-        }
-        else if(url4 != NULL)
-        {
-            free(url4);
+            else if(url4 != NULL)
+            {
+                free(url4);
+            }
         }
     }
+
+    sem_post(&arguments->done);
 
     return NULL;
 }
@@ -548,6 +680,13 @@ int main( int argc, char** argv )
 
     /* Enqueue the original url */
     enQueue(in_params.q, url, strlen(url));
+    sem_post(&in_params.queue_sem);
+
+    /* create an empty log file */
+    if(in_params.log_file != NULL)
+    {
+        create_file(in_params.log_file);
+    }
 
     /* create an empty png_urls.txt file */
     create_file("png_urls.txt");
@@ -561,27 +700,65 @@ int main( int argc, char** argv )
 
     for (int i = 0; i < in_params.num_threads; i++)
     {
-        pthread_create(p_tids + i, NULL, retreive_urls, &in_params);
+        pthread_create(&p_tids[i], NULL, retreive_urls, &in_params);
     }
+
+    sem_wait(&in_params.done);
 
     for (int i = 0; i < in_params.num_threads; i++)
     {
+        pthread_cancel(p_tids[i]);
         pthread_join(p_tids[i], NULL);
+    }
+
+    char* url5 = NULL;
+    while(in_params.q->front != NULL)
+    {
+        url5 = deQueue(in_params.q);
+        if(url5 != NULL)
+        {
+            free(url5);
+            url5 = NULL;
+        }
     }
 
     /* cleaning up */
     curl_global_cleanup();
+    xmlCleanupParser();
 
-    free(p_tids);
-    free(in_params.q);
+    if(p_tids != NULL)
+    {
+        free(p_tids);
+        p_tids = NULL;
+    }
+
+    if(in_params.q != NULL)
+    {
+        free(in_params.q);
+        in_params.q = NULL;
+    }
     hdestroy();
 
     for(int i = 0; i < MAX_URLS; i ++)
     {
-        free(in_params.all_urls[i]);
+        if(in_params.all_urls[i] != NULL)
+        {
+            free(in_params.all_urls[i]);
+            in_params.all_urls[i] = NULL;
+        }
     }
 
-    free(in_params.all_urls);
+    if(in_params.all_urls != NULL)
+    {
+        free(in_params.all_urls);
+        in_params.all_urls = NULL;
+    }
+
+    if(in_params.log_file != NULL)
+    {
+        free(in_params.log_file);
+        in_params.log_file = NULL;
+    }
 
     if (gettimeofday(&tv, NULL) != 0)
     {
