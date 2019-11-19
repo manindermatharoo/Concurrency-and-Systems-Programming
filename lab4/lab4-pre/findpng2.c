@@ -347,11 +347,11 @@ int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *ar
     pid_t pid =getpid();
 
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &url);
-    // if(not_all_urls_found(args) == 1)
-    // {
+    if(not_all_urls_found(args) == 1)
+    {
         find_http(p_recv_buf->buf, p_recv_buf->size, follow_relative_link, url, args);
         sprintf(fname, "./output_%d.html", pid);
-    // }
+    }
     return 0;
 }
 
@@ -362,16 +362,18 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *arg
     if ( eurl != NULL) {
         if(isPNG(p_recv_buf) == 0)
         {
-            if(not_all_urls_found(args) == 1)
+            pthread_mutex_lock(&args->png_urls_found_currently);
+            args->png_urls_found++;
+            if(args->png_urls_found >= args->num_images+1)
             {
-                pthread_mutex_lock(&args->png_urls_found_currently);
-                args->png_urls_found++;
-                pthread_mutex_unlock(&args->png_urls_found_currently);
-
-                pthread_mutex_lock(&args->png_file_lock);
-                write_file("png_urls.txt", eurl, strlen(eurl));
-                pthread_mutex_unlock(&args->png_file_lock);
+                sem_post(&args->done);
+                while(1)
+                {
+                    pthread_testcancel();
+                }
             }
+            write_file("png_urls.txt", eurl, strlen(eurl));
+            pthread_mutex_unlock(&args->png_urls_found_currently);
         }
     }
 
@@ -578,14 +580,14 @@ void *retreive_urls(void *arg)
 
     int status = 1;
 
-    while((not_all_urls_found(arguments) == 1))
+    while((1))
     {
         pthread_mutex_lock(&arguments->threads_mutex);
             pthread_cleanup_push(mutex_cleanup, arguments);
                 arguments->threads_waiting++;
                 pthread_mutex_lock(&arguments->queue);
                 status = (arguments->q->front == NULL);
-                if((arguments->threads_waiting == arguments->num_threads) && (status == 1))
+                if(((arguments->threads_waiting == arguments->num_threads) && (status == 1)))
                 {
                     sem_post(&arguments->done);
                 }
@@ -681,12 +683,12 @@ void *retreive_urls(void *arg)
         }
     }
 
-    pthread_mutex_lock(&arguments->waiting_mutex);
-    arguments->less_threads_waiting++;
-    pthread_mutex_unlock(&arguments->waiting_mutex);
+    // pthread_mutex_lock(&arguments->waiting_mutex);
+    // arguments->less_threads_waiting++;
+    // pthread_mutex_unlock(&arguments->waiting_mutex);
 
-    while(number_of_threads_waiting(arguments) == 0);
-    sem_post(&arguments->done);
+    // while(number_of_threads_waiting(arguments) == 0);
+    // sem_post(&arguments->done);
 
     return NULL;
 }
@@ -792,6 +794,18 @@ int main( int argc, char** argv )
         free(in_params.log_file);
         in_params.log_file = NULL;
     }
+
+    pthread_mutex_destroy(&in_params.queue);
+    pthread_mutex_destroy(&in_params.all_urls_array);
+    pthread_mutex_destroy(&in_params.log_file_lock);
+    pthread_mutex_destroy(&in_params.png_file_lock);
+    pthread_mutex_destroy(&in_params.png_urls_found_currently);
+    pthread_mutex_destroy(&in_params.hash);
+    pthread_mutex_destroy(&in_params.threads_mutex);
+    pthread_mutex_destroy(&in_params.waiting_mutex);
+
+    sem_destroy(&in_params.queue_sem);
+    sem_destroy(&in_params.done);
 
     if (gettimeofday(&tv, NULL) != 0)
     {
