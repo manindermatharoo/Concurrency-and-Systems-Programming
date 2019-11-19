@@ -347,11 +347,11 @@ int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *ar
     pid_t pid =getpid();
 
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &url);
-    if(not_all_urls_found(args) == 1)
-    {
+    // if(not_all_urls_found(args) == 1)
+    // {
         find_http(p_recv_buf->buf, p_recv_buf->size, follow_relative_link, url, args);
         sprintf(fname, "./output_%d.html", pid);
-    }
+    // }
     return 0;
 }
 
@@ -410,8 +410,8 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *ar
         return 2;
     }
 
-    if(not_all_urls_found(args) == 1)
-    {
+    // if(not_all_urls_found(args) == 1)
+    // {
         if ( strstr(ct, CT_HTML) ) {
             return process_html(curl_handle, p_recv_buf, args);
         } else if ( strstr(ct, CT_PNG) ) {
@@ -419,7 +419,7 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *ar
         } else {
             sprintf(fname, "./output_%d", pid);
         }
-    }
+    // }
 
     return 0;
 }
@@ -501,6 +501,7 @@ void initThreadArgs(struct thread_args* params)
     memset(params->all_urls, 0, MAX_URLS * sizeof(char*));
     params->all_urls_index = 0;                                     /* index of all urls */
     params->log_file = NULL;
+    params->url4 = NULL;
 
     /* initialize all the mutexes */
     pthread_mutex_init(&params->queue, NULL);
@@ -510,13 +511,13 @@ void initThreadArgs(struct thread_args* params)
     pthread_mutex_init(&params->png_urls_found_currently, NULL);
     pthread_mutex_init(&params->hash, NULL);
     pthread_mutex_init(&params->threads_mutex, NULL);
-
-    // pthread_cond_init(&params->cond);
+    pthread_mutex_init(&params->waiting_mutex, NULL);
 
     sem_init(&params->queue_sem, 0, 0);
     sem_init(&params->done, 0, 0);
 
     params->threads_waiting = 0;
+    params->less_threads_waiting = 0;
 }
 
 int not_all_urls_found(struct thread_args *args)
@@ -534,18 +535,35 @@ int number_of_threads_waiting(struct thread_args *args)
 {
     int status2 = 0;
 
-    pthread_mutex_lock(&args->threads_mutex);
-    args->threads_waiting++;
-    status2 = args->threads_waiting == args->num_threads;
-    pthread_mutex_unlock(&args->threads_mutex);
+    pthread_mutex_lock(&args->waiting_mutex);
+    status2 = args->less_threads_waiting == args->num_threads;
+    pthread_mutex_unlock(&args->waiting_mutex);
 
-    return status2;
+    return (status2 == 1);
 }
 
 void mutex_cleanup(void* arg)
 {
     struct thread_args *arguments = arg;
     pthread_mutex_unlock(&arguments->threads_mutex);
+    pthread_mutex_unlock(&arguments->queue);
+    free(&arguments->url4);
+}
+
+void curl_cleanup( void* arg )
+{
+    CURL *curl_handler = arg;
+    curl_easy_cleanup(curl_handler);
+}
+
+void buf_cleanup(void* arg)
+{
+    recv_buf_cleanup(arg);
+}
+
+void free_url(void* arg)
+{
+    free(arg);
 }
 
 void *retreive_urls(void *arg)
@@ -560,8 +578,6 @@ void *retreive_urls(void *arg)
 
     int status = 1;
 
-    // while(1);
-
     while((not_all_urls_found(arguments) == 1))
     {
         pthread_mutex_lock(&arguments->threads_mutex);
@@ -569,11 +585,12 @@ void *retreive_urls(void *arg)
                 arguments->threads_waiting++;
                 pthread_mutex_lock(&arguments->queue);
                 status = (arguments->q->front == NULL);
-                pthread_mutex_unlock(&arguments->queue);
-                if ((arguments->threads_waiting == arguments->num_threads) && (status == 1) ) {
+                if((arguments->threads_waiting == arguments->num_threads) && (status == 1))
+                {
                     sem_post(&arguments->done);
                 }
             pthread_cleanup_pop(0);
+        pthread_mutex_unlock(&arguments->queue);
         pthread_mutex_unlock(&arguments->threads_mutex);
 
 		sem_wait(&arguments->queue_sem);
@@ -583,8 +600,9 @@ void *retreive_urls(void *arg)
                 arguments->threads_waiting--;
                 pthread_mutex_lock(&arguments->queue);
                 url4 = deQueue(arguments->q);
-                pthread_mutex_unlock(&arguments->queue);
+                arguments->url4 = url4;
             pthread_cleanup_pop(0);
+        pthread_mutex_unlock(&arguments->queue);
 		pthread_mutex_unlock(&arguments->threads_mutex);
 
         if(url4 != NULL)
@@ -601,6 +619,24 @@ void *retreive_urls(void *arg)
             /* Make sure the queue is not empty */
             if(url4 != NULL && found_item == NULL)
             {
+                pthread_cleanup_push(free_url, url4);
+
+                char* temp_url4 = malloc(strlen(url4) * sizeof(char) + 1);
+                strncpy(temp_url4, url4, strlen(url4));
+                temp_url4[strlen(url4)] = '\0';
+
+                ENTRY temp_url;
+                temp_url.key = temp_url4;
+                temp_url.data = 0;
+
+                pthread_mutex_lock(&arguments->hash);
+                hsearch(temp_url, ENTER);
+                pthread_mutex_unlock(&arguments->hash);
+
+                pthread_mutex_lock(&arguments->all_urls_array);
+                arguments->all_urls[arguments->all_urls_index++] = temp_url4;
+                pthread_mutex_unlock(&arguments->all_urls_array);
+
                 /* Update the url to be used */
                 curl_handle = easy_handle_init(&recv_buf, url4);
                 if ( curl_handle == NULL ) {
@@ -609,15 +645,14 @@ void *retreive_urls(void *arg)
                     abort();
                 }
 
+                pthread_cleanup_push(buf_cleanup, &recv_buf);
+                pthread_cleanup_push(curl_cleanup, curl_handle);
+
                 /* get it! */
                 curl_easy_perform(curl_handle);
 
                 /* process the download data */
                 process_data(curl_handle, &recv_buf, arguments);
-
-                char* temp_url4 = malloc(strlen(url4) * sizeof(char) + 1);
-                strncpy(temp_url4, url4, strlen(url4));
-                temp_url4[strlen(url4)] = '\0';
 
                 pthread_mutex_lock(&arguments->log_file_lock);
                 if(arguments->log_file != NULL)
@@ -626,22 +661,15 @@ void *retreive_urls(void *arg)
                 }
                 pthread_mutex_unlock(&arguments->log_file_lock);
 
-                ENTRY temp_url;
-                temp_url.key = temp_url4;
-                temp_url.data = 0;
-
-                pthread_mutex_lock(&arguments->all_urls_array);
-                arguments->all_urls[arguments->all_urls_index++] = temp_url4;
-                pthread_mutex_unlock(&arguments->all_urls_array);
-
-                pthread_mutex_lock(&arguments->hash);
-                hsearch(temp_url, ENTER);
-                pthread_mutex_unlock(&arguments->hash);
+                pthread_cleanup_pop(0);
 
                 if(url4 != NULL)
                 {
                     free(url4);
                 }
+
+                pthread_cleanup_pop(0);
+                pthread_cleanup_pop(0);
 
                 curl_easy_cleanup(curl_handle);
                 recv_buf_cleanup(&recv_buf);
@@ -653,6 +681,11 @@ void *retreive_urls(void *arg)
         }
     }
 
+    pthread_mutex_lock(&arguments->waiting_mutex);
+    arguments->less_threads_waiting++;
+    pthread_mutex_unlock(&arguments->waiting_mutex);
+
+    while(number_of_threads_waiting(arguments) == 0);
     sem_post(&arguments->done);
 
     return NULL;

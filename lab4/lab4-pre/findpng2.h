@@ -41,6 +41,7 @@ struct thread_args
     char** all_urls;
     int all_urls_index;
     char* log_file;
+    char* url4;
 
     pthread_mutex_t queue;
     pthread_mutex_t all_urls_array;
@@ -49,13 +50,13 @@ struct thread_args
     pthread_mutex_t png_urls_found_currently;
     pthread_mutex_t hash;
     pthread_mutex_t threads_mutex;
-
-    pthread_cond_t cond;
+    pthread_mutex_t waiting_mutex;
 
     sem_t queue_sem;
     sem_t done;
 
     int threads_waiting;
+    int less_threads_waiting;
 };
 
 typedef struct recv_buf2 {
@@ -75,6 +76,7 @@ size_t write_cb_curl3(char *p_recv, size_t size, size_t nmemb, void *p_userdata)
 int recv_buf_init(RECV_BUF *ptr, size_t max_size);
 int recv_buf_cleanup(RECV_BUF *ptr);
 void create_file(const char* path);
+void file_close(void *arg);
 int write_file(const char *path, const void *in, size_t len);
 CURL *easy_handle_init(RECV_BUF *ptr, const char *url);
 int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *args);
@@ -85,6 +87,9 @@ void initThreadArgs(struct thread_args* params);
 int not_all_urls_found(struct thread_args *args);
 int number_of_threads_waiting(struct thread_args *args);
 void mutex_cleanup(void* arg);
+void curl_cleanup( void* arg );
+void buf_cleanup( void* arg );
+void free_url(void* arg);
 int command_line_options(struct thread_args* params, char *argurl, int argc, char ** argv);
 
 void *retreive_urls(void *arg);
