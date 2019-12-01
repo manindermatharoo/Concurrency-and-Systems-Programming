@@ -1,0 +1,261 @@
+==12057== Memcheck, a memory error detector
+==12057== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==12057== Using Valgrind-3.13.0 and LibVEX; rerun with -h for copyright info
+==12057== Command: ./findpng3 -t 100 -m 40 -v log.txt http://ece252-1.uwaterloo.ca/lab4
+==12057== Parent PID: 16643
+==12057== 
+--12057-- 
+--12057-- Valgrind options:
+--12057--    --leak-check=full
+--12057--    --show-leak-kinds=all
+--12057--    --track-origins=yes
+--12057--    --verbose
+--12057--    --log-file=valgrind-out.txt
+--12057-- Contents of /proc/version:
+--12057--   Linux version 4.15.0-64-generic (buildd@lgw01-amd64-038) (gcc version 7.4.0 (Ubuntu 7.4.0-1ubuntu1~18.04.1)) #73-Ubuntu SMP Thu Sep 12 13:16:13 UTC 2019
+--12057-- 
+--12057-- Arch and hwcaps: AMD64, LittleEndian, amd64-cx16-lzcnt-rdtscp-sse3-avx-avx2-bmi
+--12057-- Page sizes: currently 4096, max supported 4096
+--12057-- Valgrind library directory: /usr/lib/valgrind
+--12057-- Reading syms from /home/msmathar/labs/ece252/lab5/lab5/findpng3
+--12057-- Reading syms from /lib/x86_64-linux-gnu/ld-2.27.so
+--12057--   Considering /lib/x86_64-linux-gnu/ld-2.27.so ..
+--12057--   .. CRC mismatch (computed 1b7c895e wanted 2943108a)
+--12057--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/ld-2.27.so ..
+--12057--   .. CRC is valid
+--12057-- Reading syms from /usr/lib/valgrind/memcheck-amd64-linux
+--12057--   Considering /usr/lib/valgrind/memcheck-amd64-linux ..
+--12057--   .. CRC mismatch (computed c25f395c wanted 0a9602a8)
+--12057--    object doesn't have a symbol table
+--12057--    object doesn't have a dynamic symbol table
+--12057-- Scheduler: using generic scheduler lock implementation.
+--12057-- Reading suppressions file: /usr/lib/valgrind/default.supp
+==12057== embedded gdbserver: reading from /tmp/vgdb-pipe-from-vgdb-to-12057-by-msmathar-on-???
+==12057== embedded gdbserver: writing to   /tmp/vgdb-pipe-to-vgdb-from-12057-by-msmathar-on-???
+==12057== embedded gdbserver: shared mem   /tmp/vgdb-pipe-shared-mem-vgdb-12057-by-msmathar-on-???
+==12057== 
+==12057== TO CONTROL THIS PROCESS USING vgdb (which you probably
+==12057== don't want to do, unless you know exactly what you're doing,
+==12057== or are doing some strange experiment):
+==12057==   /usr/lib/valgrind/../../bin/vgdb --pid=12057 ...command...
+==12057== 
+==12057== TO DEBUG THIS PROCESS USING GDB: start GDB like this
+==12057==   /path/to/gdb ./findpng3
+==12057== and then give GDB the following command
+==12057==   target remote | /usr/lib/valgrind/../../bin/vgdb --pid=12057
+==12057== --pid is optional if only one valgrind process is running
+==12057== 
+--12057-- REDIR: 0x401f2f0 (ld-linux-x86-64.so.2:strlen) redirected to 0x58060901 (???)
+--12057-- REDIR: 0x401f0d0 (ld-linux-x86-64.so.2:index) redirected to 0x5806091b (???)
+--12057-- Reading syms from /usr/lib/valgrind/vgpreload_core-amd64-linux.so
+--12057--   Considering /usr/lib/valgrind/vgpreload_core-amd64-linux.so ..
+--12057--   .. CRC mismatch (computed 4b63d83e wanted 670599e6)
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so
+--12057--   Considering /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so ..
+--12057--   .. CRC mismatch (computed a4b37bee wanted 8ad4dc94)
+--12057--    object doesn't have a symbol table
+==12057== WARNING: new redirection conflicts with existing -- ignoring it
+--12057--     old: 0x0401f2f0 (strlen              ) R-> (0000.0) 0x58060901 ???
+--12057--     new: 0x0401f2f0 (strlen              ) R-> (2007.0) 0x04c32db0 strlen
+--12057-- REDIR: 0x401d360 (ld-linux-x86-64.so.2:strcmp) redirected to 0x4c33ee0 (strcmp)
+--12057-- REDIR: 0x401f830 (ld-linux-x86-64.so.2:mempcpy) redirected to 0x4c374f0 (mempcpy)
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libxml2.so.2.9.4
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libcurl.so.4.5.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libc-2.27.so
+--12057--   Considering /lib/x86_64-linux-gnu/libc-2.27.so ..
+--12057--   .. CRC mismatch (computed b1c74187 wanted 042cc048)
+--12057--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/libc-2.27.so ..
+--12057--   .. CRC is valid
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libdl-2.27.so
+--12057--   Considering /lib/x86_64-linux-gnu/libdl-2.27.so ..
+--12057--   .. CRC mismatch (computed bd82fa02 wanted d1fdccc9)
+--12057--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/libdl-2.27.so ..
+--12057--   .. CRC is valid
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libicuuc.so.60.2
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libz.so.1.2.11
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /lib/x86_64-linux-gnu/liblzma.so.5.2.2
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libm-2.27.so
+--12057--   Considering /lib/x86_64-linux-gnu/libm-2.27.so ..
+--12057--   .. CRC mismatch (computed 7feae033 wanted b29b2508)
+--12057--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/libm-2.27.so ..
+--12057--   .. CRC is valid
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libnghttp2.so.14.15.2
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libidn2.so.0.3.3
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/librtmp.so.1
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libpsl.so.5.2.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libssl.so.1.1
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libgssapi_krb5.so.2.2
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libldap_r-2.4.so.2.10.8
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/liblber-2.4.so.2.10.8
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libpthread-2.27.so
+--12057--   Considering /usr/lib/debug/.build-id/28/c6aade70b2d40d1f0f3d0a1a0cad1ab816448f.debug ..
+--12057--   .. build-id is valid
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libicudata.so.60.2
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.25
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libgcc_s.so.1
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libunistring.so.2.1.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libgnutls.so.30.14.10
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libhogweed.so.4.4
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libnettle.so.6.4
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libgmp.so.10.3.2
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libkrb5.so.3.3
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libk5crypto.so.3.1
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libcom_err.so.2.1
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libkrb5support.so.0.1
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libresolv-2.27.so
+--12057--   Considering /lib/x86_64-linux-gnu/libresolv-2.27.so ..
+--12057--   .. CRC mismatch (computed 4f654d8d wanted bb34a537)
+--12057--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/libresolv-2.27.so ..
+--12057--   .. CRC is valid
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libsasl2.so.2.0.25
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libgssapi.so.3.0.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libp11-kit.so.0.3.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libtasn1.so.6.5.5
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libkeyutils.so.1.5
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libheimntlm.so.0.1.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libkrb5.so.26.0.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libasn1.so.8.0.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libhcrypto.so.4.1.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libroken.so.18.1.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libffi.so.6.0.4
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libwind.so.0.0.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libheimbase.so.1.0.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libhx509.so.5.0.0
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /usr/lib/x86_64-linux-gnu/libsqlite3.so.0.8.6
+--12057--    object doesn't have a symbol table
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libcrypt-2.27.so
+--12057--   Considering /lib/x86_64-linux-gnu/libcrypt-2.27.so ..
+--12057--   .. CRC mismatch (computed 8955bf71 wanted 17b36cbd)
+--12057--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/libcrypt-2.27.so ..
+--12057--   .. CRC is valid
+--12057-- REDIR: 0x551ac70 (libc.so.6:memmove) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x5519d40 (libc.so.6:strncpy) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551af50 (libc.so.6:strcasecmp) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x5519790 (libc.so.6:strcat) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x5519d70 (libc.so.6:rindex) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551c7c0 (libc.so.6:rawmemchr) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551ade0 (libc.so.6:mempcpy) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551ac10 (libc.so.6:bcmp) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x5519d00 (libc.so.6:strncmp) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x5519800 (libc.so.6:strcmp) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551ad40 (libc.so.6:memset) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x55380f0 (libc.so.6:wcschr) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x5519ca0 (libc.so.6:strnlen) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x5519870 (libc.so.6:strcspn) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551afa0 (libc.so.6:strncasecmp) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x5519840 (libc.so.6:strcpy) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551b0e0 (libc.so.6:memcpy@@GLIBC_2.14) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x5519da0 (libc.so.6:strpbrk) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x55197c0 (libc.so.6:index) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x5519c70 (libc.so.6:strlen) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x55246c0 (libc.so.6:memrchr) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551aff0 (libc.so.6:strcasecmp_l) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551abe0 (libc.so.6:memchr) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x5538eb0 (libc.so.6:wcslen) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551a050 (libc.so.6:strspn) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551af20 (libc.so.6:stpncpy) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551aef0 (libc.so.6:stpcpy) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551c7f0 (libc.so.6:strchrnul) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551b040 (libc.so.6:strncasecmp_l) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x55ad8a0 (libc.so.6:__memcpy_chk) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x551ab20 (libc.so.6:strstr) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+--12057-- REDIR: 0x55ad970 (libc.so.6:__memmove_chk) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+==12057== WARNING: new redirection conflicts with existing -- ignoring it
+--12057--     old: 0x0560aac0 (__memcpy_chk_avx_una) R-> (2030.0) 0x04c375e0 __memcpy_chk
+--12057--     new: 0x0560aac0 (__memcpy_chk_avx_una) R-> (2024.0) 0x04c36fa0 __memmove_chk
+--12057-- REDIR: 0x5519cd0 (libc.so.6:strncat) redirected to 0x4a2a6e0 (_vgnU_ifunc_wrapper)
+==12057== WARNING: new redirection conflicts with existing -- ignoring it
+--12057--     old: 0x0560aac0 (__memcpy_chk_avx_una) R-> (2030.0) 0x04c375e0 __memcpy_chk
+--12057--     new: 0x0560aac0 (__memcpy_chk_avx_una) R-> (2024.0) 0x04c36fa0 __memmove_chk
+==12057== WARNING: new redirection conflicts with existing -- ignoring it
+--12057--     old: 0x0560aac0 (__memcpy_chk_avx_una) R-> (2030.0) 0x04c375e0 __memcpy_chk
+--12057--     new: 0x0560aac0 (__memcpy_chk_avx_una) R-> (2024.0) 0x04c36fa0 __memmove_chk
+==12057== WARNING: new redirection conflicts with existing -- ignoring it
+--12057--     old: 0x0560aac0 (__memcpy_chk_avx_una) R-> (2030.0) 0x04c375e0 __memcpy_chk
+--12057--     new: 0x0560aac0 (__memcpy_chk_avx_una) R-> (2024.0) 0x04c36fa0 __memmove_chk
+==12057== WARNING: new redirection conflicts with existing -- ignoring it
+--12057--     old: 0x0560aac0 (__memcpy_chk_avx_una) R-> (2030.0) 0x04c375e0 __memcpy_chk
+--12057--     new: 0x0560aac0 (__memcpy_chk_avx_una) R-> (2024.0) 0x04c36fa0 __memmove_chk
+--12057-- REDIR: 0x560a3c0 (libc.so.6:__strrchr_avx2) redirected to 0x4c32730 (rindex)
+--12057-- REDIR: 0x560a590 (libc.so.6:__strlen_avx2) redirected to 0x4c32cf0 (strlen)
+--12057-- REDIR: 0x5513070 (libc.so.6:malloc) redirected to 0x4c2faa0 (malloc)
+--12057-- REDIR: 0x560aad0 (libc.so.6:__memcpy_avx_unaligned_erms) redirected to 0x4c366e0 (memmove)
+--12057-- REDIR: 0x55e5d60 (libc.so.6:__strcmp_ssse3) redirected to 0x4c33da0 (strcmp)
+--12057-- REDIR: 0x5516030 (libc.so.6:calloc) redirected to 0x4c31a70 (calloc)
+--12057-- REDIR: 0x5609fa0 (libc.so.6:__strchr_avx2) redirected to 0x4c32950 (index)
+--12057-- REDIR: 0x560aac0 (libc.so.6:__memcpy_chk_avx_unaligned_erms) redirected to 0x4c375e0 (__memcpy_chk)
+--12057-- REDIR: 0x5513950 (libc.so.6:free) redirected to 0x4c30cd0 (free)
+--12057-- REDIR: 0x560af50 (libc.so.6:__memset_avx2_unaligned_erms) redirected to 0x4c365d0 (memset)
+--12057-- REDIR: 0x55f9100 (libc.so.6:__strncpy_ssse3) redirected to 0x4c32fb0 (strncpy)
+--12057-- REDIR: 0x55f7950 (libc.so.6:__strcpy_ssse3) redirected to 0x4c32dd0 (strcpy)
+--12057-- REDIR: 0x551a590 (libc.so.6:__GI_strstr) redirected to 0x4c37760 (__strstr_sse2)
+--12057-- REDIR: 0x5514c30 (libc.so.6:realloc) redirected to 0x4c31cb0 (realloc)
+--12057-- REDIR: 0x55fbc80 (libc.so.6:__stpcpy_ssse3) redirected to 0x4c35f60 (stpcpy)
+--12057-- REDIR: 0x560aab0 (libc.so.6:__mempcpy_avx_unaligned_erms) redirected to 0x4c37130 (mempcpy)
+--12057-- REDIR: 0x5606420 (libc.so.6:__memchr_avx2) redirected to 0x4c33f80 (memchr)
+--12057-- REDIR: 0x5601510 (libc.so.6:__strncmp_sse42) redirected to 0x4c33570 (__strncmp_sse42)
+--12057-- REDIR: 0x56061b0 (libc.so.6:__strpbrk_sse42) redirected to 0x4c37860 (strpbrk)
+--12057-- REDIR: 0x56066f0 (libc.so.6:__rawmemchr_avx2) redirected to 0x4c37050 (rawmemchr)
+--12057-- REDIR: 0x560a1d0 (libc.so.6:__strchrnul_avx2) redirected to 0x4c37020 (strchrnul)
+--12057-- REDIR: 0x56085f0 (libc.so.6:__strncasecmp_avx) redirected to 0x4c336d0 (strncasecmp)
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libnss_files-2.27.so
+--12057--   Considering /lib/x86_64-linux-gnu/libnss_files-2.27.so ..
+--12057--   .. CRC mismatch (computed 5cdb0f74 wanted 1b4e69e7)
+--12057--   Considering /usr/lib/debug/lib/x86_64-linux-gnu/libnss_files-2.27.so ..
+--12057--   .. CRC is valid
+--12057-- REDIR: 0x5606f80 (libc.so.6:__strcasecmp_avx) redirected to 0x4c335f0 (strcasecmp)
+--12057-- Reading syms from /lib/x86_64-linux-gnu/libnss_mdns4_minimal.so.2
+--12057--    object doesn't have a symbol table
+==12057== 
+==12057== Process terminating with default action of signal 2 (SIGINT)
+==12057==    at 0x5222AAB: ??? (in /usr/lib/x86_64-linux-gnu/libcurl.so.4.5.0)
+==12057==    by 0x52236C3: curl_maprintf (in /usr/lib/x86_64-linux-gnu/libcurl.so.4.5.0)
+==12057==    by 0x520B398: ??? (in /usr/lib/x86_64-linux-gnu/libcurl.so.4.5.0)
+==12057==    by 0x520B456: ??? (in /usr/lib/x86_64-linux-gnu/libcurl.so.4.5.0)
+==12057==    by 0x520B730: ??? (in /usr/lib/x86_64-linux-gnu/libcurl.so.4.5.0)
+==12057==    by 0x5232319: ??? (in /usr/lib/x86_64-linux-gnu/libcurl.so.4.5.0)
+==12057==    by 0x52333E3: curl_multi_perform (in /usr/lib/x86_64-linux-gnu/libcurl.so.4.5.0)
+==12057==    by 0x10A9B3: retreive_urls (findpng3.c:535)
+==12057==    by 0x10ADBE: main (findpng3.c:638)
