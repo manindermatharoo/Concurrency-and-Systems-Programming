@@ -455,6 +455,10 @@ int command_line_options(struct thread_args* params, char *argurl, int argc, cha
     {
         url_index = 5;
     }
+    else if(((t_found == 1) && (v_found == 1)))
+    {
+        url_index = 5;
+    }
     else if((t_found == 1) || (m_found == 1) || (v_found == 1))
     {
         url_index = 3;
