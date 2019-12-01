@@ -14,8 +14,6 @@
 #include <libxml/xpath.h>
 #include <libxml/uri.h>
 #include "queue.h"
-#include <semaphore.h>
-#include <signal.h>
 
 #define ECE252_HEADER "X-Ece252-Fragment: "
 #define BUF_SIZE 1048576  /* 1024*1024 = 1M */
@@ -40,23 +38,6 @@ struct thread_args
     struct Queue* q;
     char** all_urls;
     int all_urls_index;
-    char* log_file;
-    char* url4;
-
-    pthread_mutex_t queue;
-    pthread_mutex_t all_urls_array;
-    pthread_mutex_t log_file_lock;
-    pthread_mutex_t png_file_lock;
-    pthread_mutex_t png_urls_found_currently;
-    pthread_mutex_t hash;
-    pthread_mutex_t threads_mutex;
-    pthread_mutex_t waiting_mutex;
-
-    sem_t queue_sem;
-    sem_t done;
-
-    int threads_waiting;
-    int less_threads_waiting;
 };
 
 typedef struct recv_buf2 {
@@ -70,26 +51,19 @@ typedef struct recv_buf2 {
 int isPNG(RECV_BUF *p_recv_buf);
 htmlDocPtr mem_getdoc(char *buf, int size, const char *url);
 xmlXPathObjectPtr getnodeset (xmlDocPtr doc, xmlChar *xpath);
-int find_http(char *fname, int size, int follow_relative_links, const char *base_url, struct thread_args *args);
+int find_http(char *fname, int size, int follow_relative_links, const char *base_url, struct Queue* q);
 size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata);
 size_t write_cb_curl3(char *p_recv, size_t size, size_t nmemb, void *p_userdata);
 int recv_buf_init(RECV_BUF *ptr, size_t max_size);
 int recv_buf_cleanup(RECV_BUF *ptr);
 void create_file(const char* path);
-void file_close(void *arg);
 int write_file(const char *path, const void *in, size_t len);
 CURL *easy_handle_init(RECV_BUF *ptr, const char *url);
-int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *args);
-int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *args);
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, struct thread_args *args);
+int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, struct Queue* q);
+int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, int* pngs_found);
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, struct Queue* q, int* pngs_found);
 
 void initThreadArgs(struct thread_args* params);
-int not_all_urls_found(struct thread_args *args);
-int number_of_threads_waiting(struct thread_args *args);
-void mutex_cleanup(void* arg);
-void curl_cleanup( void* arg );
-void buf_cleanup( void* arg );
-void free_url(void* arg);
 int command_line_options(struct thread_args* params, char *argurl, int argc, char ** argv);
 
 void *retreive_urls(void *arg);
